@@ -42,20 +42,22 @@ marker_key_mapping = {
     'describe_load_balancers': 'Marker',
 }
 
+possible_markers = frozenset(marker_key_mapping.values())
 
-def scroll(fn, resp_key=None, marker_key=None, **args):
+
+def scroll(fn, resp_key=None, marker_key=None, **kwargs):
     """
     :return: Iterable over items
     """
 
-    resp = fn(**args)
+    resp = fn(**kwargs)
 
     if not resp_key:
         _maybe_key = resp_key_mapping.get(fn.__name__)
         if _maybe_key:
             resp_key = _maybe_key
         else:
-            _possible_keys = set(resp.keys()) - {'ResponseMetadata', 'NextMarker', 'Marker', 'position'}
+            _possible_keys = set(resp.keys()) - {'ResponseMetadata'} - possible_markers
             assert len(_possible_keys) == 1
             resp_key = _possible_keys.pop()
             print('By elimination, using resp_key={} in call to {}'.format(resp_key, fn.__name__))
@@ -67,7 +69,7 @@ def scroll(fn, resp_key=None, marker_key=None, **args):
         if _maybe_key:
             marker_key = _maybe_key
         else:
-            _possible_keys = {kk for kk in resp.keys() if kk.endswith('Marker')}
+            _possible_keys = {kk for kk in resp.keys() if kk.endswith('Marker') or kk.startswith('Next')}
             if _possible_keys:
                 marker_key = _possible_keys.pop()
                 print('Guess marker_key={} in call to {}'.format(marker_key, fn.__name__))
@@ -79,7 +81,7 @@ def scroll(fn, resp_key=None, marker_key=None, **args):
 
     while NextMarker:
         next_args = {marker_key: NextMarker}
-        next_args.update(args)
+        next_args.update(kwargs)
         resp = fn(**next_args)
         yield from resp[resp_key]
         NextMarker = resp.get(marker_key)
