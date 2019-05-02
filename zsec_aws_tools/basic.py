@@ -25,6 +25,8 @@ def get_account_id(session: boto3.Session, context=None) -> str:
 
 
 resp_key_mapping = {'list_web_acls': 'WebACLs',
+                    'list_rule_groups': 'RuleGroups',
+                    'list_activated_rules_in_rule_group': 'ActivatedRules',
                     'list_ip_sets': 'IPSets',
                     'get_rest_apis': 'items',
                     'describe_load_balancers': 'LoadBalancers',
@@ -34,6 +36,7 @@ resp_key_mapping = {'list_web_acls': 'WebACLs',
 marker_key_mapping = {
     'list_web_acls': 'NextMarker',
     'list_ip_sets': 'NextMarker',
+    'list_activated_rules_in_rule_group': 'NextMarker',
     'get_rest_apis': 'position',
     'list_accounts': 'NextToken',
     'describe_load_balancers': 'Marker',
@@ -55,7 +58,7 @@ def scroll(fn, resp_key=None, marker_key=None, **args):
             _possible_keys = set(resp.keys()) - {'ResponseMetadata', 'NextMarker', 'Marker', 'position'}
             assert len(_possible_keys) == 1
             resp_key = _possible_keys.pop()
-            print('Guess resp_key={} in call to {}'.format(resp_key, fn.__name__))
+            print('By elimination, using resp_key={} in call to {}'.format(resp_key, fn.__name__))
 
     yield from resp[resp_key]
 
