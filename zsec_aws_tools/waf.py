@@ -88,7 +88,8 @@ class WAFResource(abc.ABC):
     session: boto3.Session
     region_name: str
 
-    def __init__(self, session, region_name=None, name=None, id_=None, ensure_exists=True, **creation_kwargs):
+    def __init__(self, session, region_name=None, name=None, id_=None, ensure_exists=True, old_names=(),
+                 **creation_kwargs):
         """
         service_client could be waf, waf-regional, or fms
 
@@ -100,6 +101,10 @@ class WAFResource(abc.ABC):
         self.region_name = region_name
         self.service_client = session.client(get_service_name(self.kind, region_name),
                                              region_name=region_name if region_name != 'global' else 'us-east-1')
+
+        self.old_versions = [
+            self.__class__(session, region_name=region_name, name=old_name, ensure_exists=False)
+            for old_name in old_names]
 
         assert name or id_
 
@@ -200,6 +205,10 @@ class UpdateableWAFResource(WAFResource, Iterable, metaclass=abc.ABCMeta):
             delete_method(**{self.id_key: self.id_, 'ChangeToken': change_token})
 
         self.exists = False
+
+    def clean_old_versions(self):
+        for old_version in self.old_versions:  # type: UpdateableWAFResource
+            old_version.delete()
 
 
 class ConditionSet(UpdateableWAFResource, Container, Iterable, metaclass=abc.ABCMeta):
