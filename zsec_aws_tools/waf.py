@@ -106,6 +106,8 @@ class WAFResource(abc.ABC):
             self.__class__(session, region_name=region_name, name=old_name, ensure_exists=False)
             for old_name in old_names]
 
+        clean_up_stack.append(self.clean_old_versions)
+
         assert name or id_
 
         if name:
@@ -143,6 +145,14 @@ class WAFResource(abc.ABC):
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self.id_ == other.id_
+
+    @abc.abstractmethod
+    def delete(self, **kwargs):
+        pass
+
+    def clean_old_versions(self):
+        for old_version in self.old_versions:
+            old_version.delete()
 
 
 class UpdateableWAFResource(WAFResource, Iterable, metaclass=abc.ABCMeta):
@@ -205,11 +215,6 @@ class UpdateableWAFResource(WAFResource, Iterable, metaclass=abc.ABCMeta):
             delete_method(**{self.id_key: self.id_, 'ChangeToken': change_token})
 
         self.exists = False
-
-    def clean_old_versions(self):
-        for old_version in self.old_versions:  # type: UpdateableWAFResource
-            old_version.delete()
-
 
 class ConditionSet(UpdateableWAFResource, Container, Iterable, metaclass=abc.ABCMeta):
     def __iter__(self):
@@ -509,11 +514,13 @@ class Policy(WAFResource):
 
         self.exists = True
 
-    def delete(self, DeleteAllPolicyResources: bool):
-        return self.service_client.delete_policy(
+    def delete(self, DeleteAllPolicyResources: bool = False):
+        resp = self.service_client.delete_policy(
             PolicyId=self.id_,
             DeleteAllPolicyResources= DeleteAllPolicyResources
         )
+        self.exists = False
+        return resp
 
 
 kind_to_type = {
@@ -531,3 +538,13 @@ def copy_condition_set(descriptors: Iterable, set_b: ConditionSet):
             to_delete.append(descriptor)
 
     set_b.update(insertions=to_insert, deletions=to_delete)
+
+
+# keep track of old versions that need cleaning
+clean_up_stack = []
+
+
+def clean_up():
+    while clean_up_stack:
+        thunk = clean_up_stack.pop()
+        thunk()
