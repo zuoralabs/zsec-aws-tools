@@ -92,7 +92,7 @@ class WAFResource(abc.ABC):
     region_name: str
 
     def __init__(self, session, region_name=None, name=None, id_=None, ensure_exists=True, old_names=(),
-                 **creation_kwargs):
+                 creation_kwargs={}):
         """
         service_client could be waf, waf-regional, or fms
 
