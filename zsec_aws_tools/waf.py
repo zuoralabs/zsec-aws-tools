@@ -67,6 +67,9 @@ def create_resource(client, kind: Kind, name, **kwargs):
         _kwargs = dict(RateKey='IP', RateLimit=2000)
         _kwargs.update(kwargs)
         return fn(Name=name, MetricName=name, ChangeToken=change_token, **_kwargs)
+    elif kind == Kind.web_acl:
+        _kwargs = dict(DefaultAction={'Type': 'ALLOW'})
+        return fn(Name=name, MetricName=name, ChangeToken=change_token, **_kwargs)
     else:
         return fn(Name=name, ChangeToken=change_token)
 
@@ -408,6 +411,45 @@ class RateBasedRule(UpdateableWAFResource, Iterable):
         super().update(insertions=_insertions, deletions=_deletions, RateLimit=RateLimit)
 
 
+class WebACL(UpdateableWAFResource):
+    top_key = 'WebACL'
+    id_key = 'WebACLId'
+    descriptor_key = 'Rule'
+    descriptors_key = 'Rules'
+    kind = Kind.web_acl
+
+    def rules(self):
+        for item in self:
+            yield Rule(self.session, self.region_name, id_=item[Rule.id_key])
+
+    def __iter__(self):
+        yield from self.service_client.get_web_acl(WebACLId=self.id_)[self.top_key][self.descriptors_key]
+
+    def update(self, insertions=(), deletions=(), **kwargs):
+        """
+        Descriptor structure:
+
+        {
+            'Priority': 123,
+            'RuleId': 'string',
+            'Action': {
+                'Type': 'BLOCK'|'ALLOW'|'COUNT'
+            },
+            'OverrideAction': {
+                'Type': 'NONE'|'COUNT'
+            },
+            'Type': 'REGULAR'|'RATE_BASED'|'GROUP',
+            'ExcludedRules': [
+                {
+                    'RuleId': 'string'
+                },
+            ]
+        }
+        """
+        assert not kwargs
+        super().update(insertions, deletions)
+
+
 class Policy(WAFResource):
     top_key = 'Policy'
     id_key = 'PolicyId'
@@ -525,7 +567,7 @@ class Policy(WAFResource):
 
 kind_to_type = {
     cls.kind: cls
-    for cls in [Policy, Rule, RuleGroup, IPSet, GeoMatchSet, ByteMatchSet, RegexMatchSet, RegexPatternSet]
+    for cls in [Policy, Rule, RuleGroup, IPSet, GeoMatchSet, ByteMatchSet, RegexMatchSet, RegexPatternSet, WebACL]
 }
 
 
