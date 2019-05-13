@@ -195,6 +195,12 @@ class UpdateableWAFResource(WAFResource, Iterable, metaclass=abc.ABCMeta):
         )
 
     def put(self, descriptors, **kwargs):
+        """Idempotent -- make the live descriptors the same as the descriptors argument
+
+        :param descriptors: the `update` method may have more help on descriptor structure
+        :param kwargs: passes kwargs through to update
+        :return: None
+        """
         extants = list(self)
 
         insertions = [descriptor
@@ -218,6 +224,7 @@ class UpdateableWAFResource(WAFResource, Iterable, metaclass=abc.ABCMeta):
             delete_method(**{self.id_key: self.id_, 'ChangeToken': change_token})
 
         self.exists = False
+
 
 class ConditionSet(UpdateableWAFResource, Container, Iterable, metaclass=abc.ABCMeta):
     def __iter__(self):
