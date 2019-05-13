@@ -414,7 +414,7 @@ class RateBasedRule(UpdateableWAFResource, Iterable):
 class WebACL(UpdateableWAFResource):
     top_key = 'WebACL'
     id_key = 'WebACLId'
-    descriptor_key = 'Rule'
+    descriptor_key = 'ActivatedRule'
     descriptors_key = 'Rules'
     kind = Kind.web_acl
 
