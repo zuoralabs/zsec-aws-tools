@@ -574,7 +574,8 @@ class Policy(WAFResource):
 
 kind_to_type = {
     cls.kind: cls
-    for cls in [Policy, Rule, RuleGroup, IPSet, GeoMatchSet, ByteMatchSet, RegexMatchSet, RegexPatternSet, WebACL]
+    for cls in [Policy, Rule, RateBasedRule, RuleGroup,
+                IPSet, GeoMatchSet, ByteMatchSet, RegexMatchSet, RegexPatternSet, WebACL]
 }
 
 
