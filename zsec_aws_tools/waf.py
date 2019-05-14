@@ -611,6 +611,19 @@ def copy_condition_set(descriptors: Iterable, set_b: ConditionSet):
     set_b.update(insertions=to_insert, deletions=to_delete)
 
 
+def copy_regex_match_set_resolving_pattern_sets_by_name(set_a: RegexMatchSet, set_b: RegexPatternSet):
+    descriptors = list()
+    for descriptor in set_a:
+        original_pattern_set = RegexPatternSet(set_a.session, region_name=set_a.region_name,
+                                               id_=descriptor['RegexPatternSetId'], ensure_exists=False)
+        target_pattern_set = RegexPatternSet(set_b.session, region_name=set_b.region_name,
+                                             name=original_pattern_set.name, ensure_exists=False)
+        descriptor['RegexPatternSetId'] = target_pattern_set.id_
+        descriptors.append(descriptor)
+
+    copy_condition_set(descriptors, set_b)
+
+
 # keep track of old versions that need cleaning
 clean_up_stack = []
 
