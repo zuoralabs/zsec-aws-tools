@@ -60,15 +60,17 @@ def list_resources(client, kind: Kind) -> Iterable[Dict]:
 def create_resource(client, change_token, kind: Kind, name, **kwargs):
     fn = getattr(client, 'create_{}'.format(kind.value))
 
+    metric_name = name.replace('-', '').replace('_', '')
+
     if kind in [Kind.rule, Kind.rule_group]:
-        return fn(Name=name, MetricName=name, ChangeToken=change_token)
+        return fn(Name=name, MetricName=metric_name, ChangeToken=change_token)
     elif kind in [Kind.rate_based_rule]:
         _kwargs = dict(RateKey='IP', RateLimit=2000)
         _kwargs.update(kwargs)
-        return fn(Name=name, MetricName=name, ChangeToken=change_token, **_kwargs)
+        return fn(Name=name, MetricName=metric_name, ChangeToken=change_token, **_kwargs)
     elif kind == Kind.web_acl:
         _kwargs = dict(DefaultAction={'Type': 'ALLOW'})
-        return fn(Name=name, MetricName=name, ChangeToken=change_token, **_kwargs)
+        return fn(Name=name, MetricName=metric_name, ChangeToken=change_token, **_kwargs)
     else:
         return fn(Name=name, ChangeToken=change_token)
 
