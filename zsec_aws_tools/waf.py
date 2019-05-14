@@ -57,8 +57,7 @@ def list_resources(client, kind: Kind) -> Iterable[Dict]:
         return scroll(fn)
 
 
-def create_resource(client, kind: Kind, name, **kwargs):
-    change_token = client.get_change_token()['ChangeToken']
+def create_resource(client, change_token, kind: Kind, name, **kwargs):
     fn = getattr(client, 'create_{}'.format(kind.value))
 
     if kind in [Kind.rule, Kind.rule_group]:
@@ -123,7 +122,17 @@ class WAFResource(abc.ABC):
                 if self.kind == Kind.policy:
                     raise NotImplementedError
                 logger.info('{} "{}" does not exist. Creating.'.format(self.top_key, name))
-                resp = create_resource(self.service_client, self.kind, self.name, **creation_kwargs)
+
+                while True:
+                    try:
+                        resp = create_resource(self.service_client,
+                                               change_token=self.service_client.get_change_token()['ChangeToken'],
+                                               kind=self.kind, name = self.name, **creation_kwargs)
+                        break
+                    except self.service_client.exceptions.WAFStaleDataException:
+                        logger.info("Got WAFStaleDataException; retrying ...")
+                        continue
+
                 self.id_ = resp[self.top_key][self.id_key]
                 self.exists = True
             else:
@@ -184,15 +193,18 @@ class UpdateableWAFResource(WAFResource, Iterable, metaclass=abc.ABCMeta):
 
         specific_update_fn_kwargs = {
             self.id_key: self.id_,
-            'ChangeToken': self.service_client.get_change_token()['ChangeToken'],
             'Updates': updates}
 
         specific_update_fn_kwargs.update(kwargs)
 
         specific_update_fn = getattr(self.service_client, 'update_' + self.kind.value)
-        return specific_update_fn(
-            **specific_update_fn_kwargs
-        )
+        while True:
+            try:
+                return specific_update_fn(ChangeToken=self.service_client.get_change_token()['ChangeToken'],
+                                          **specific_update_fn_kwargs)
+            except self.service_client.exceptions.WAFStaleDataException:
+                logger.info("Got WAFStaleDataException; retrying ...")
+                continue
 
     def put(self, descriptors, **kwargs):
         """Idempotent -- make the live descriptors the same as the descriptors argument
@@ -220,8 +232,15 @@ class UpdateableWAFResource(WAFResource, Iterable, metaclass=abc.ABCMeta):
         if self.exists:
             self.put(())
             delete_method = getattr(self.service_client, 'delete_{}'.format(self.kind.value))
-            change_token = self.service_client.get_change_token()['ChangeToken']
-            delete_method(**{self.id_key: self.id_, 'ChangeToken': change_token})
+
+            while True:
+                try:
+                    delete_method(ChangeToken=self.service_client.get_change_token()['ChangeToken'],
+                                  **{self.id_key: self.id_})
+                    break
+                except self.service_client.exceptions.WAFStaleDataException:
+                    logger.info("Got WAFStaleDataException; retrying ...")
+                    continue
 
         self.exists = False
 
