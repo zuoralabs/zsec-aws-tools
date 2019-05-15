@@ -477,6 +477,17 @@ class WebACL(UpdateableWAFResource):
         assert not kwargs
         super().update(insertions, deletions)
 
+    def list_resources_arns(self) -> Iterable[dict]:
+        if self.region_name == 'global':
+            from .cloudfront import cloudfront_distributions
+
+            for dist in cloudfront_distributions(self.session):
+                associated_webacl = dist['WebACLId']
+                if associated_webacl == self.id_:
+                    yield dist['DistributionId']
+        else:
+            yield from self.service_client.list_resources_for_web_acl(WebACLId=self.id_)['ResourceArns']
+
 
 class Policy(WAFResource):
     top_key = 'Policy'
