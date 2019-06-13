@@ -38,21 +38,28 @@ resp_key_mapping = {'list_web_acls': 'WebACLs',
                     'get_rest_apis': 'items',
                     'describe_load_balancers': 'LoadBalancers',
                     'list_accounts': 'Accounts',
+
+                    'list_functions': 'Functions',
                     }
 
-marker_key_mapping = {
+req_marker_key_mapping = {
     'list_web_acls': 'NextMarker',
     'list_ip_sets': 'NextMarker',
     'list_activated_rules_in_rule_group': 'NextMarker',
     'get_rest_apis': 'position',
     'list_accounts': 'NextToken',
     'describe_load_balancers': 'Marker',
+    'list_functions': 'Marker',
 }
 
-possible_markers = frozenset(marker_key_mapping.values())
+resp_marker_key_mapping = req_marker_key_mapping.copy()
+resp_marker_key_mapping['list_functions'] = 'NextMarker'
 
 
-def scroll(fn, resp_key=None, marker_key=None, **kwargs):
+possible_markers = frozenset(resp_marker_key_mapping.values())
+
+
+def scroll(fn, resp_key=None, resp_marker_key=None, req_marker_key=None, **kwargs):
     """
     :return: Iterable over items
     """
@@ -71,24 +78,31 @@ def scroll(fn, resp_key=None, marker_key=None, **kwargs):
 
     yield from resp[resp_key]
 
-    if not marker_key:
-        _maybe_key = marker_key_mapping.get(fn.__name__)
+    if not resp_marker_key:
+        _maybe_key = resp_marker_key_mapping.get(fn.__name__)
         if _maybe_key:
-            marker_key = _maybe_key
+            resp_marker_key = _maybe_key
         else:
             _possible_keys = {kk for kk in resp.keys() if kk.endswith('Marker') or kk.startswith('Next')}
             if _possible_keys:
-                marker_key = _possible_keys.pop()
-                print('Guess marker_key={} in call to {}'.format(marker_key, fn.__name__))
+                resp_marker_key = _possible_keys.pop()
+                print('Guess marker_key={} in call to {}'.format(resp_marker_key, fn.__name__))
             else:
                 print("Could not guess marker_key in call to {}. Maybe no marker? Keys: ".format(fn.__name__, resp.keys()))
                 return
 
-    NextMarker = resp.get(marker_key)
+    if not req_marker_key:
+        _maybe_key = req_marker_key_mapping.get(fn.__name__)
+        if _maybe_key:
+            req_marker_key = _maybe_key
+        else:
+            req_marker_key = resp_marker_key
+
+    NextMarker = resp.get(resp_marker_key)
 
     while NextMarker:
-        next_args = {marker_key: NextMarker}
+        next_args = {req_marker_key: NextMarker}
         next_args.update(kwargs)
         resp = fn(**next_args)
         yield from resp[resp_key]
-        NextMarker = resp.get(marker_key)
+        NextMarker = resp.get(resp_marker_key)
