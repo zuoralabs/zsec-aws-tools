@@ -1,5 +1,10 @@
 import boto3
-from typing import Tuple
+import abc
+from typing import Tuple, Dict, Optional
+from .cleaning import clean_up_stack
+import logging
+
+logger = logging.getLogger(__name__)
 
 ACCOUNT_ID_ARN_INDEX = 4
 REGION_ID_ARN_INDEX = 3
@@ -55,7 +60,6 @@ req_marker_key_mapping = {
 resp_marker_key_mapping = req_marker_key_mapping.copy()
 resp_marker_key_mapping['list_functions'] = 'NextMarker'
 
-
 possible_markers = frozenset(resp_marker_key_mapping.values())
 
 
@@ -88,7 +92,8 @@ def scroll(fn, resp_key=None, resp_marker_key=None, req_marker_key=None, **kwarg
                 resp_marker_key = _possible_keys.pop()
                 print('Guess marker_key={} in call to {}'.format(resp_marker_key, fn.__name__))
             else:
-                print("Could not guess marker_key in call to {}. Maybe no marker? Keys: ".format(fn.__name__, resp.keys()))
+                print("Could not guess marker_key in call to {}. Maybe no marker? Keys: ".format(fn.__name__,
+                                                                                                 resp.keys()))
                 return
 
     if not req_marker_key:
@@ -106,3 +111,74 @@ def scroll(fn, resp_key=None, resp_marker_key=None, req_marker_key=None, **kwarg
         resp = fn(**next_args)
         yield from resp[resp_key]
         NextMarker = resp.get(resp_marker_key)
+
+
+class AWSResource(abc.ABC):
+    top_key: str
+    id_key: str
+    name_key: str = 'Name'
+    session: boto3.Session
+    region_name: str
+    client_name: str
+
+    def __init__(self, session, region_name=None, name=None, id_=None, ensure_exists=True, old_names=(),
+                 config: Optional[Dict] = None):
+        """
+        WARNING: if given, name is assumed to identify the condition set, although this is not always true
+
+        config contains the same kwargs as the create function for this resource.
+        """
+        self.session = session
+        self.region_name = region_name
+        self.service_client = session.client(self.client_name, region_name=region_name)
+        self.config = config or {}
+
+        self.old_versions = [
+            self.__class__(session, region_name=region_name, name=old_name, ensure_exists=False)
+            for old_name in old_names]
+
+        clean_up_stack.append(self.clean_old_versions)
+
+        assert name or id_
+
+        if name:
+            self.name = name
+            maybe_id = self._get_id(name)
+            if maybe_id:
+                self.id_ = maybe_id
+                self.exists = True
+            elif ensure_exists:
+                logger.info('{} "{}" does not exist. Creating.'.format(self.top_key, name))
+
+                self.id_ = self.create()
+                self.exists = True
+            else:
+                self.exists = False
+        elif id_:
+            self.id_ = id_
+            self.name = self.describe()[self.name_key]
+            self.exists = True
+
+    @abc.abstractmethod
+    def _get_id(self, name):
+        """name is assumed to be unique"""
+        pass
+
+    @abc.abstractmethod
+    def describe(self):
+        pass
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and self.id_ == other.id_
+
+    @abc.abstractmethod
+    def create(self) -> Dict:
+        pass
+
+    @abc.abstractmethod
+    def delete(self, **kwargs):
+        pass
+
+    def clean_old_versions(self):
+        for old_version in self.old_versions:
+            old_version.delete()

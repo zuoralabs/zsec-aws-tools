@@ -1,89 +1,16 @@
-import abc
 import boto3
 import logging
 from typing import Dict, Union
 from .cleaning import clean_up_stack
 import io
-from .basic import scroll
+from .basic import scroll, AWSResource
 import zipfile
 from pathlib import Path
-import botocore.exceptions
 import hashlib
 import hmac
 
 
 logger = logging.getLogger(__name__)
-
-
-class AWSResource(abc.ABC):
-    top_key: str
-    id_key: str
-    name_key: str = 'Name'
-    session: boto3.Session
-    region_name: str
-
-    def __init__(self, session, region_name=None, name=None, id_=None, ensure_exists=True, old_names=(),
-                 config={}):
-        """
-        WARNING: if given, name is assumed to identify the condition set, although this is not always true
-
-        config contains the same kwargs as the create function for this resource.
-        """
-        self.session = session
-        self.region_name = region_name
-        self.service_client = session.client('lambda', region_name=region_name)
-        self.config = config
-
-        self.old_versions = [
-            self.__class__(session, region_name=region_name, name=old_name, ensure_exists=False)
-            for old_name in old_names]
-
-        clean_up_stack.append(self.clean_old_versions)
-
-        assert name or id_
-
-        if name:
-            self.name = name
-            maybe_id = self._get_id(name)
-            if maybe_id:
-                self.id_ = maybe_id
-                self.exists = True
-            elif ensure_exists:
-                logger.info('{} "{}" does not exist. Creating.'.format(self.top_key, name))
-
-                self.id_ = self.create(**config)
-                self.exists = True
-            else:
-                self.exists = False
-        elif id_:
-            self.id_ = id_
-            self.name = self.describe()[self.name_key]
-            self.exists = True
-
-    @abc.abstractmethod
-    def _get_id(self, name):
-        """name is assumed to be unique"""
-        pass
-
-    @abc.abstractmethod
-    def describe(self):
-        pass
-
-    def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.id_ == other.id_
-
-    @abc.abstractmethod
-    def create(self) -> Dict:
-        pass
-
-    @abc.abstractmethod
-    def delete(self, **kwargs):
-        pass
-
-    def clean_old_versions(self):
-        for old_version in self.old_versions:
-            old_version.delete()
-
 
 # list(get_operation_model(aws_lambda, 'update_function_configuration' ).input_shape.members.keys())
 update_function_configuration_input_keys = ['FunctionName',
@@ -117,6 +44,7 @@ class FunctionResource(AWSResource):
     top_key = 'Configuration'
     id_key = 'FunctionArn'
     name_key = 'FunctionName'
+    client_name = 'lambda'
 
     def create(self):
         combined_kwargs = {self.name_key: self.name}
