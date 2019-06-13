@@ -10,7 +10,7 @@ from zsec_aws_tools import scroll
 import toolz
 
 region_name = 'us-east-1'
-session = boto3.Session(profile_name='test-fms', region_name=region_name)
+session = boto3.Session(profile_name='test-waf', region_name=region_name)
 
 # DANGEROUS! Remove test creation policies at your own risk!
 DO_TEST_CREATE_POLICY = False
