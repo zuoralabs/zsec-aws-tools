@@ -1,14 +1,18 @@
-import boto3
 import logging
 from typing import Dict, Union
-from .cleaning import clean_up_stack
 import io
-from .basic import scroll, AWSResource
+from .basic import scroll, AWSResource, get_index_id_from_description, AwaitableAWSResource
 import zipfile
 from pathlib import Path
 import hashlib
 import hmac
+import time
+from botocore.exceptions import ClientError
+from .iam import Role
+import json
 
+zsec_tools_manager_tag_value = 'zsec_aws_tools.aws_lambda'
+manager_tag_key = 'Manager'
 
 logger = logging.getLogger(__name__)
 
@@ -40,59 +44,81 @@ update_function_code_input_keys = ['FunctionName',
                                    'RevisionId']
 
 
-class FunctionResource(AWSResource):
-    top_key = 'Configuration'
+class FunctionResource(AwaitableAWSResource, AWSResource):
+    top_key = 'Function'
     id_key = 'FunctionArn'
     name_key = 'FunctionName'
     client_name = 'lambda'
+    sdk_name = 'function'
+    index_id_key = name_key
+    not_found_exception_name = 'ResourceNotFoundException'
+    role: Role
+    waiter_name = 'function_exists'
 
-    def create(self):
-        combined_kwargs = {self.name_key: self.name}
-        combined_kwargs.update(self.config)
-        return self.service_client.create_function(**combined_kwargs)[self.id_key]
+    def _process_config(self):
+        self.role = role = self.config['Role']
+        assert isinstance(self.role, Role)
+        role_arn = role.describe()[role.arn_key]
+        self.config['Role'] = role_arn
 
-    def _get_id(self, name):
-        try:
-            return self.describe()[self.id_key]
-        except self.service_client.exceptions.ResourceNotFoundException:
-            return None
+        # Set default Manager tag if it doesn't exist.
+        tags = {manager_tag_key: zsec_tools_manager_tag_value}  # defaults
+        tags.update(self.config.get('Tags', {}))
+        self.config['Tags'] = tags
 
-    def delete(self, **kwargs):
-        combined_kwargs = {self.name_key: self.name}
+        super()._process_config()
+
+    def _get_index_id_from_name(self):
+        return get_index_id_from_description(self)
+
+    def _just_need_to_wait(self, err):
+        """Determines if we got a real error or if we just need to wait and retry
+
+        See
+        - https://stackoverflow.com/questions/36419442/the-role-defined-for-the-function-cannot-be-assumed-by-lambda
+        - https://stackoverflow.com/questions/37503075/invalidparametervalueexception-the-role-defined-for-the-function-cannot-be-assu
+
+        """
+
+        return (err.response['Error']['Code'] in ('InvalidParameterValueException', 'AccessDeniedException')
+                and err.response['Error']['Message'] == 'The role defined for the function cannot be assumed by Lambda.'
+                and any((statement['Effect'] == 'Allow'
+                         and statement['Principal'].get('Service') == "lambda.amazonaws.com"
+                         and statement['Action'] == "sts:AssumeRole")
+                        for statement in json.loads(self.role.config['AssumeRolePolicyDocument'])['Statement']))
+
+    def describe(self, **kwargs) -> Dict:
+        combined_kwargs = {self.index_id_key: self.index_id}
         combined_kwargs.update(kwargs)
-        self.service_client.delete_function(**combined_kwargs)
+        return self.service_client.get_function(**combined_kwargs)
 
-    def describe(self, **kwargs):
-        combined_kwargs = {self.name_key: self.name}
-        combined_kwargs.update(kwargs)
-        return self.service_client.get_function(**combined_kwargs)[self.top_key]
+    def create(self, wait: bool = True, **kwargs) -> str:
+        while True:
+            try:
+                super().create(wait=wait, **kwargs)
+            except ClientError as err:
+                if self._just_need_to_wait(err):
+                    logger.info('Failure {}; need to wait'.format(err.operation_name))
+                    time.sleep(1)
+                else:
+                    raise
+            else:
+                break
+        return self.name
 
-    def update(self, **kwargs):
-        combined_kwargs = {self.name_key: self.name}
-        combined_kwargs.update(kwargs)
-        code_kwargs = {k: v for k, v in combined_kwargs.items()
-                       if k in update_function_code_input_keys}
-        configuration_kwargs = {k: v for k, v in combined_kwargs.items()
-                                if k in update_function_configuration_input_keys}
-        resp = self.service_client.update_function_code(**code_kwargs)[self.top_key]
-        resp.update(self.service_client.update_function_configuration(**configuration_kwargs)[self.top_key])
-        return resp
-
-    def put(self, force=False):
-        kwargs = self.config
-        tags = {'Creator': 'zsec_aws_tools.aws_lambda'}
-        tags.update(kwargs.get('Tags', {}))
-        kwargs['Tags'] = tags
-        kwargs[self.name_key] = self.name
-
-        # Check if function exists, get configuration if it exists. If function does not exist, catch error.
+    def put(self, wait: bool, force: bool = False):
         if self.exists:
-            remote_configuration = self.describe()
+            kwargs = self.config
+            remote_description = self.describe()
+            remote_tags = remote_description['Tags']
+            remote_configuration = remote_description['Configuration']
             arn = remote_configuration['FunctionArn']
+
+            tags = self.config['Tags']
+
             if not force:
-                if remote_configuration.get('Tags', {}).get('Creator') != tags['Creator']:
-                    raise self.service_client.exceptions.ResourceConflictException(
-                        "Resource created by another creator.")
+                if remote_tags.get(manager_tag_key) != tags[manager_tag_key]:
+                    raise ValueError("Resource managed by another manager.")
 
             remote_sha = remote_configuration['CodeSha256']
 
@@ -113,19 +139,48 @@ class FunctionResource(AWSResource):
 
             kwargs3 = {}
             kwargs3.update({k: v for k, v in kwargs.items() if k in update_function_configuration_input_keys})
-            self.service_client.update_function_configuration(**kwargs3)
-            self.service_client.tag_resource(Resource=arn, Tags=tags)
+            while True:
+                try:
+                    self.service_client.update_function_configuration(**kwargs3)
+                    self.service_client.tag_resource(Resource=arn, Tags=tags)
+                except ClientError as err:
+                    if self._just_need_to_wait(err):
+                        logger.info('Failure {}; need to wait'.format(err.operation_name))
+                        time.sleep(1)
+                    else:
+                        raise
+                else:
+                    break
         else:
             try:
                 logger.info('creating function')
-                self.service_client.create_function(**kwargs)
+                self.create(wait=wait)
                 logger.info('finished creating function')
             except self.service_client.exceptions.ResourceConflictException as error:
                 # this should never happen
                 logger.error('possible race condition encountered')
                 raise
+
+    def invoke(self, json_codec: bool = False, **kwargs):
+        if json_codec and 'Payload' in kwargs:
+            kwargs['Payload'] = json.dumps(kwargs['Payload']).encode()
+
+        while True:
+            try:
+                resp = self.service_client.invoke(**{self.index_id_key: self.index_id, **kwargs})
+            except ClientError as err:
+                if self._just_need_to_wait(err):
+                    logger.info('Failure {}; need to wait'.format(err.operation_name))
+                    time.sleep(1)
+                else:
+                    raise
             else:
-                raise
+                break
+
+        if json_codec:
+            return json.loads(resp['Payload'].read().decode())
+        else:
+            return resp
 
 
 def zip_compress(source: Path, output: Union[Path, io.IOBase]) -> None:
