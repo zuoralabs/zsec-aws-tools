@@ -10,6 +10,7 @@ import abc
 import logging
 import json
 import collections
+from .cleaning import clean_up_stack
 
 logger = logging.getLogger(__name__)
 
@@ -635,8 +636,6 @@ def copy_regex_match_set_resolving_pattern_sets_by_name(set_a: RegexMatchSet, se
     copy_condition_set(descriptors, set_b)
 
 
-# keep track of old versions that need cleaning
-clean_up_stack = []
 
 
 def clean_up():
