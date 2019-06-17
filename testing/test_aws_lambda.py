@@ -6,6 +6,7 @@ import zipfile
 import textwrap
 import json
 import logging
+import uuid
 import time
 from botocore.exceptions import ClientError
 
@@ -54,7 +55,9 @@ def test_aws_lambda():
 
     policy = zaws_iam.Policy(index_id="arn:aws:iam::aws:policy/ReadOnlyAccess", session=session)
     role = zaws_iam.Role(
-        name='test_lambda_1_role', session=session,
+        name='test_lambda_1_role',
+        ztid=uuid.UUID('1b761bcf-eaef-b927-ca02-cc6c927b228d'),
+        session=session,
         config=dict(Path='/test/',
                     AssumeRolePolicyDocument=json.dumps(assume_role_policy_document, ),
                     Policies=[policy]))
@@ -67,6 +70,7 @@ def test_aws_lambda():
         # attached_policies = list(role.list_role_policies())
         fn = zaws_lambda.FunctionResource(
             name='test_lambda_1',
+            ztid=uuid.UUID('6db733ed-c2f0-ac73-78ec-8ab2bdffd124'),
             session=session,
             config=dict(
                 Code={'ZipFile': code},

@@ -1,7 +1,8 @@
 import logging
 from typing import Dict, Union
 import io
-from .basic import scroll, AWSResource, get_index_id_from_description, AwaitableAWSResource
+from .basic import (scroll, AWSResource, get_index_id_from_description, AwaitableAWSResource, manager_tag_key,
+                    add_manager_tags, add_ztid_tags)
 import zipfile
 from pathlib import Path
 import hashlib
@@ -10,9 +11,6 @@ import time
 from botocore.exceptions import ClientError
 from .iam import Role
 import json
-
-zsec_tools_manager_tag_value = 'zsec_aws_tools.aws_lambda'
-manager_tag_key = 'Manager'
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +29,6 @@ update_function_configuration_input_keys = ['FunctionName',
                                             'TracingConfig',
                                             'RevisionId',
                                             'Layers']
-
 
 # list(get_operation_model(aws_lambda, 'update_function_code' ).input_shape.members.keys())
 update_function_code_input_keys = ['FunctionName',
@@ -61,10 +58,8 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
         role_arn = role.describe()[role.arn_key]
         self.config['Role'] = role_arn
 
-        # Set default Manager tag if it doesn't exist.
-        tags = {manager_tag_key: zsec_tools_manager_tag_value}  # defaults
-        tags.update(self.config.get('Tags', {}))
-        self.config['Tags'] = tags
+        add_manager_tags(self)
+        add_ztid_tags(self)
 
         super()._process_config()
 

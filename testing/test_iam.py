@@ -1,6 +1,7 @@
 import boto3
 import zsec_aws_tools.iam as zaws_iam
 import json
+import uuid
 
 session = boto3.Session(profile_name='test', region_name='us-east-1')
 
@@ -42,6 +43,7 @@ def test_iam_role():
     'test_iam_role_1_role'
     role = zaws_iam.Role(
         name='test_lambda_1_role', session=session,
+        ztid=uuid.UUID('42d02a7d-a8bf-c662-22fb-9ee83246bd8b'),
         config=dict(Path='/test/',
                     AssumeRolePolicyDocument=json.dumps(assume_role_policy_document),
                     Policies=[policy]))

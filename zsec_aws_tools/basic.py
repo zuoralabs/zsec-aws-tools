@@ -5,12 +5,15 @@ from .cleaning import clean_up_stack
 import logging
 from toolz import first
 import time
-
+import uuid
 
 logger = logging.getLogger(__name__)
 
 ACCOUNT_ID_ARN_INDEX = 4
 REGION_ID_ARN_INDEX = 3
+
+zsec_tools_manager_tag_value = 'zsec_aws_tools.aws_lambda'
+manager_tag_key = 'Manager'
 
 
 def get_account_id(session: boto3.Session, context=None) -> str:
@@ -131,18 +134,20 @@ def scroll(fn, resp_key=None, resp_marker_key=None, req_marker_key=None, **kwarg
 class AWSResource(abc.ABC):
     top_key: str
     id_key: str
-    sdk_name: str     # name in sdk functions, for example create_*, delete_*, etc.
+    sdk_name: str  # name in sdk functions, for example create_*, delete_*, etc.
     name_key: str = 'Name'
     session: boto3.Session
     region_name: str
     client_name: str
     has_arn: bool
     has_id: bool
-    index_id_key: str    # the key that is given to describe or get to obtain description.
+    index_id_key: str  # the key that is given to describe or get to obtain description.
     not_found_exception_name: str
     non_creation_parameters = ()
 
-    def __init__(self, session, region_name=None, name=None, index_id=None, old_names=(),
+    def __init__(self, session, region_name=None, name=None, index_id=None,
+                 ztid: Optional[uuid.UUID] = None,
+                 old_names=(),
                  config: Optional[Dict] = None):
         """
         WARNING: if given, name is assumed to identify the condition set, although this is not always true
@@ -152,6 +157,7 @@ class AWSResource(abc.ABC):
         self.session = session
         self.region_name = region_name
         self.service_client = session.client(self.client_name, region_name=region_name)
+        self.ztid = ztid
 
         self.old_versions = [
             self.__class__(session=session, region_name=region_name, name=old_name)
@@ -269,10 +275,24 @@ class AwaitableAWSResource(AWSResource, abc.ABC):
         return result
 
 
+def add_manager_tags(res: AWSResource):
+    """Set default Manager tag if it doesn't exist"""
+    tags = {manager_tag_key: zsec_tools_manager_tag_value}
+    tags.update(res.config.get('Tags', {}))  # original config takes precedence if there is a conflict
+    res.config['Tags'] = tags
+
+
+def add_ztid_tags(res: AWSResource):
+    """Set default Manager tag if it doesn't exist"""
+    tags = {'ztid': str(res.ztid or uuid.uuid4())}
+    tags.update(res.config.get('Tags', {}))  # original config takes precedence if there is a conflict
+    res.config['Tags'] = tags
+
+
 def get_index_id_from_description(self: AWSResource) -> Optional[str]:
     try:
         return self.describe()[self.id_key]
     except self.service_client.exceptions.ResourceNotFoundException:
         return None
-    #except self.service_client.exceptions.NoSuchEntityException:
+    # except self.service_client.exceptions.NoSuchEntityException:
     #    return None
