@@ -1,7 +1,7 @@
 import logging
 import boto3
 from typing import Dict, Iterable
-from .basic import AWSResource, scroll, AwaitableAWSResource
+from .basic import AWSResource, scroll, AwaitableAWSResource, add_ztid_tags, add_manager_tags, manager_tag_key
 from toolz import first
 import abc
 from .meta import apply_with_relevant_kwargs
@@ -62,14 +62,33 @@ class IAMResource(AwaitableAWSResource, AWSResource, abc.ABC):
     arn_key: str = 'Arn'
     not_found_exception_name = 'NoSuchEntityException'
 
+    def _process_config(self):
+        add_manager_tags(self)
+        add_ztid_tags(self)
+
+        # Hack to convert to IAM type tag argument conventions. Should change `add_manager_tags` and
+        # `add_ztid_tags` instead.
+        self.config['Tags'] = [{'Key': k, 'Value': v} for k, v in self.config['Tags'].items()]
+
+        super()._process_config()
+
     def describe(self, **kwargs) -> Dict:
         combined_kwargs = {self.index_id_key: self.index_id}
         combined_kwargs.update(kwargs)
         client_method = getattr(self.service_client, "get_{}".format(self.sdk_name))
         return client_method(**combined_kwargs)[self.top_key]
 
-    def put(self, wait: bool = True):
+    def put(self, wait: bool = True, force: bool = False):
         if self.exists:
+            remote_description = self.describe()
+            remote_tags = {tag['Key']: tag['Value'] for tag in remote_description['Tags']}
+
+            tags = {tag['Key']: tag['Value'] for tag in self.config['Tags']}
+
+            if not force:
+                if remote_tags.get(manager_tag_key) != tags[manager_tag_key]:
+                    raise ValueError("Resource managed by another manager.")
+
             self.update()
         else:
             logger.info('{} "{}" does not exist. Creating.'.format(self.top_key, self.name))

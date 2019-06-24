@@ -1,5 +1,7 @@
+import pytest
 import boto3
 import zsec_aws_tools.iam as zaws_iam
+from zsec_aws_tools.basic import manager_tag_key
 import json
 import uuid
 
@@ -48,6 +50,13 @@ def test_iam_role():
                     AssumeRolePolicyDocument=json.dumps(assume_role_policy_document),
                     Policies=[policy]))
     role.put(wait=True)
+
+    # change the manager tag
+    tags = {tag['Key']: tag['Value'] for tag in role.config['Tags']}
+    tags[manager_tag_key] = 'alt_manager'
+    role.config['Tags'] = [{'Key': k, 'Value': v} for k, v in tags.items()]
+    with pytest.raises(Exception):
+        role.put(wait=True, force=False)
 
     role_arn = role.describe()[role.arn_key]
     assert role_arn == role.boto3_resource().arn

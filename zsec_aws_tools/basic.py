@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 ACCOUNT_ID_ARN_INDEX = 4
 REGION_ID_ARN_INDEX = 3
 
-zsec_tools_manager_tag_value = 'zsec_aws_tools.aws_lambda'
+zsec_tools_manager_tag_value = 'zsec_aws_tools'
 manager_tag_key = 'Manager'
 
 
