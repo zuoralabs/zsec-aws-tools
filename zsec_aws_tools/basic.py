@@ -287,12 +287,3 @@ def add_ztid_tags(res: AWSResource):
     tags = {'ztid': str(res.ztid or uuid.uuid4())}
     tags.update(res.config.get('Tags', {}))  # original config takes precedence if there is a conflict
     res.config['Tags'] = tags
-
-
-def get_index_id_from_description(self: AWSResource) -> Optional[str]:
-    try:
-        return self.describe()[self.id_key]
-    except self.service_client.exceptions.ResourceNotFoundException:
-        return None
-    # except self.service_client.exceptions.NoSuchEntityException:
-    #    return None

@@ -1,7 +1,7 @@
 import logging
 from typing import Dict, Union
 import io
-from .basic import (scroll, AWSResource, get_index_id_from_description, AwaitableAWSResource, manager_tag_key,
+from .basic import (scroll, AWSResource, AwaitableAWSResource, manager_tag_key,
                     add_manager_tags, add_ztid_tags)
 import zipfile
 from pathlib import Path
@@ -64,7 +64,7 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
         super()._process_config()
 
     def _get_index_id_from_name(self):
-        return get_index_id_from_description(self)
+        return self.name
 
     def _just_need_to_wait(self, err):
         """Determines if we got a real error or if we just need to wait and retry

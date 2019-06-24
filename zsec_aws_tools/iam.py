@@ -1,7 +1,7 @@
 import logging
 import boto3
 from typing import Dict, Iterable
-from .basic import AWSResource, get_index_id_from_description, scroll, AwaitableAWSResource
+from .basic import AWSResource, scroll, AwaitableAWSResource
 from toolz import first
 import abc
 from .meta import apply_with_relevant_kwargs
@@ -119,10 +119,7 @@ class Role(IAMResource):
     non_creation_parameters = ('Policies',)
 
     def _get_index_id_from_name(self):
-        try:
-            return self.describe()[self.id_key]
-        except getattr(self.service_client.exceptions, self.not_found_exception_name):
-            return None
+        return self.name
 
     def create(self, wait: bool = True, **kwargs) -> str:
         result = super().create(wait=wait, **kwargs)
