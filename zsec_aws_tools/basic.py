@@ -163,7 +163,8 @@ class AWSResource(abc.ABC):
 
         clean_up_stack.append(self.clean_old_versions)
 
-        assert name or index_id
+        if not (name or index_id):
+            raise ValueError("Invalid input. Must supply `name` or `index_id`.")
 
         if self.index_id_key == self.name_key:
             self.name = self.index_id = name or index_id
@@ -173,6 +174,12 @@ class AWSResource(abc.ABC):
                 self.exists = False
             else:
                 self.exists = True
+        elif index_id:
+            self.index_id = index_id
+            self.name = self.describe()[self.name_key]
+            self.exists = True
+            if name:
+                assert self.name == name
         elif name:
             self.name = name
             maybe_index_value = self._get_index_id_from_name()
@@ -182,10 +189,6 @@ class AWSResource(abc.ABC):
             else:
                 self.index_id = ''
                 self.exists = False
-        elif index_id:
-            self.index_id = index_id
-            self.name = self.describe()[self.name_key]
-            self.exists = True
 
         self.config = config or {}
         self._process_config()
