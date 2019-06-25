@@ -262,6 +262,16 @@ class AWSResource(abc.ABC):
     def _process_config(self) -> None:
         self.config[self.name_key] = self.name
 
+    @abc.abstractmethod
+    def put(self, wait: bool = True, force: bool = False):
+        """Create or update resource according to config. Idempotent.
+
+        :param wait: whether to wait on resource creation. Only applicable if resource is awaitable.
+        :param force: whether to force update even if the resource fails manager checks. Not always implemented.
+        :return:
+        """
+        pass
+
 
 class AwaitableAWSResource(AWSResource, abc.ABC):
     waiter_name: str
