@@ -215,8 +215,9 @@ class AWSResource(abc.ABC):
         resp = client_method(**combined_kwargs)
         # may or may not need to get self.top_key
         index_id = resp.get(self.top_key, resp).get(self.index_id_key)
-        if wait and isinstance(self, AwaitableAWSResource):
+        if wait:
             self.wait_until_exists()
+
         self.exists = True
         return resp, index_id
 
@@ -243,6 +244,10 @@ class AWSResource(abc.ABC):
             else:
                 logger.info("Waiting to confirm deletion ...")
                 time.sleep(1)
+    def wait_until_exist(self):
+        while not self._detect_existence_using_index_id():
+            logger.info("Waiting until {} exists ...".format(self))
+            time.sleep(1)
 
     def clean_old_versions(self):
         for old_version in self.old_versions:
