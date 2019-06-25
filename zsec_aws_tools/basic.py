@@ -240,7 +240,7 @@ class AWSResource(abc.ABC):
             logger.info("Waiting until {} not exists ...".format(self))
             time.sleep(1)
 
-    def wait_until_exist(self):
+    def wait_until_exists(self) -> None:
         while not self._detect_existence_using_index_id():
             logger.info("Waiting until {} exists ...".format(self))
             time.sleep(1)
