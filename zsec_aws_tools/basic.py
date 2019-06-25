@@ -215,6 +215,8 @@ class AWSResource(abc.ABC):
         resp = client_method(**combined_kwargs)
         # may or may not need to get self.top_key
         index_id = resp.get(self.top_key, resp).get(self.index_id_key)
+        if wait and isinstance(self, AwaitableAWSResource):
+            self.wait_until_exists()
         self.exists = True
         return resp, index_id
 
@@ -280,26 +282,24 @@ class AWSResource(abc.ABC):
 
 
 class AwaitableAWSResource(AWSResource, abc.ABC):
-    waiter_name: str
+    existence_waiter_name: str
     index_id_key: str
     index_id: str
 
-    def wait(self, **kwargs):
+    def wait(self, waiter_name: str, **kwargs):
         """
+        :param waiter_name: which waiter name to use
         :param kwargs: see one of the following for kwargs:
             iam: https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/iam.html#waiters
             lambda: https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/lambda.html#waiters
         """
-        waiter = self.service_client.get_waiter(self.waiter_name)
+        waiter = self.service_client.get_waiter(waiter_name)
         combined_kwargs = {self.index_id_key: self.index_id}
         combined_kwargs.update(kwargs)
         waiter.wait(**combined_kwargs)
 
-    def create(self, wait: bool = True, **kwargs) -> str:
-        result = super().create(**kwargs)
-        if wait:
-            self.wait()
-        return result
+    def wait_until_exists(self):
+        self.wait(self.existence_waiter_name)
 
 
 def add_manager_tags(res: AWSResource):

@@ -113,7 +113,7 @@ class Policy(IAMResource):
     name_key: str = 'PolicyName'
     sdk_name: str = 'policy'
     index_id_key = 'PolicyArn'
-    waiter_name = 'policy_exists'
+    existence_waiter_name = 'policy_exists'
 
     def _get_index_id_from_name(self):
         return self._get_description_from_name()['Arn']
@@ -135,7 +135,7 @@ class Role(IAMResource):
     name_key: str = 'RoleName'
     sdk_name: str = 'role'
     index_id_key = name_key
-    waiter_name = 'role_exists'
+    existence_waiter_name = 'role_exists'
     non_creation_parameters = ('Policies',)
 
     def _get_index_id_from_name(self):

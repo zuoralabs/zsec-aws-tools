@@ -50,7 +50,7 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
     index_id_key = name_key
     not_found_exception_name = 'ResourceNotFoundException'
     role: Role
-    waiter_name = 'function_exists'
+    existence_waiter_name = 'function_exists'
 
     def _process_config(self):
         self.role = role = self.config['Role']
