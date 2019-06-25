@@ -168,16 +168,12 @@ class AWSResource(abc.ABC):
 
         if self.index_id_key == self.name_key:
             self.name = self.index_id = name or index_id
-            try:
-                self.describe()
-            except getattr(self.service_client.exceptions, self.not_found_exception_name):
-                self.exists = False
-            else:
-                self.exists = True
+            self.exists = self._detect_existence_using_index_id()
         elif index_id:
             self.index_id = index_id
-            self.name = self.describe()[self.name_key]
-            self.exists = True
+            self.exists = self._detect_existence_using_index_id()
+            if self.exists:
+                self.name = self.describe()[self.name_key]
             if name:
                 assert self.name == name
         elif name:
@@ -192,6 +188,19 @@ class AWSResource(abc.ABC):
 
         self.config = config or {}
         self._process_config()
+
+    def _detect_existence_using_index_id(self) -> bool:
+        """Returns whether the resource exists.
+
+        Requires `self.index_id` to be set, but not necessarily self.name.
+        """
+        if self.index_id_key == self.name_key:
+            try:
+                self.describe()
+            except getattr(self.service_client.exceptions, self.not_found_exception_name):
+                return False
+            else:
+                return True
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self.index_id == other.index_id
@@ -237,6 +246,7 @@ class AWSResource(abc.ABC):
 
         Requires that self.name is set and that it is unique.
         Should only be called during `__init__` to set `self.id_`.
+        If it returns a string, it means this resource exists.
 
         """
         pass
