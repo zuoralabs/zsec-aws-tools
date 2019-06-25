@@ -218,11 +218,17 @@ class AWSResource(abc.ABC):
         self.exists = True
         return resp, index_id
 
-    def delete(self, **kwargs):
+    def delete(self, not_exists_ok: bool = False, **kwargs) -> Optional[Dict]:
         combined_kwargs = {self.name_key: self.name}
         combined_kwargs.update(kwargs)
         client_method = getattr(self.service_client, "delete_{}".format(self.sdk_name))
-        result = client_method(**combined_kwargs)
+        try:
+            result = client_method(**combined_kwargs)
+        except getattr(self.service_client.exceptions, self.not_found_exception_name) as err:
+            if not not_exists_ok:
+                raise
+            else:
+                result = None
         self.exists = False
         return result
 
