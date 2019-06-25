@@ -83,8 +83,8 @@ def test_aws_lambda():
         resp = fn.invoke(json_codec=True, Payload={'a': 'a'})
         assert resp == "147306"
         fn.delete()
-        fn.await_deletion()
+        fn.wait_until_not_exists()
     finally:
         role.detach_all_policies()
         role.delete()
-        role.await_deletion()
+        role.wait_until_not_exists()

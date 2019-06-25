@@ -235,7 +235,7 @@ class AWSResource(abc.ABC):
         self.exists = False
         return result
 
-    def await_deletion(self):
+    def wait_until_not_exists(self) -> None:
         while self._detect_existence_using_index_id():
             logger.info("Waiting until {} not exists ...".format(self))
             time.sleep(1)

@@ -71,4 +71,4 @@ def test_iam_role():
 
     role.detach_all_policies()
     role.delete()
-    role.await_deletion()
+    role.wait_until_not_exists()
