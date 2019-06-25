@@ -194,13 +194,12 @@ class AWSResource(abc.ABC):
 
         Requires `self.index_id` to be set, but not necessarily self.name.
         """
-        if self.index_id_key == self.name_key:
-            try:
-                self.describe()
-            except getattr(self.service_client.exceptions, self.not_found_exception_name):
-                return False
-            else:
-                return True
+        try:
+            self.describe()
+        except getattr(self.service_client.exceptions, self.not_found_exception_name):
+            return False
+        else:
+            return True
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self.index_id == other.index_id
