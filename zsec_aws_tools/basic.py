@@ -236,14 +236,10 @@ class AWSResource(abc.ABC):
         return result
 
     def await_deletion(self):
-        while True:
-            try:
-                self.describe()
-            except getattr(self.service_client.exceptions, self.not_found_exception_name):
-                return
-            else:
-                logger.info("Waiting to confirm deletion ...")
-                time.sleep(1)
+        while self._detect_existence_using_index_id():
+            logger.info("Waiting until {} not exists ...".format(self))
+            time.sleep(1)
+
     def wait_until_exist(self):
         while not self._detect_existence_using_index_id():
             logger.info("Waiting until {} exists ...".format(self))
