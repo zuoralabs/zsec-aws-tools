@@ -101,7 +101,7 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
                 break
         return self.name
 
-    def put(self, wait: bool, force: bool = False):
+    def put(self, wait: bool = True, force: bool = False):
         if self.exists:
             kwargs = self.config
             remote_description = self.describe()
