@@ -1,6 +1,6 @@
 import logging
 import boto3
-from typing import Dict, Iterable
+from typing import Dict, Iterable, Tuple, Optional
 from .basic import AWSResource, scroll, AwaitableAWSResource, add_ztid_tags, add_manager_tags, manager_tag_key
 from toolz import first
 import abc
@@ -92,7 +92,8 @@ class IAMResource(AwaitableAWSResource, AWSResource, abc.ABC):
             self.update()
         else:
             logger.info('{} "{}" does not exist. Creating.'.format(self.top_key, self.name))
-            self.index_id = self.create(wait=wait)
+            resp, self.index_id = self.create(wait=wait)
+            assert self.index_id  # should always pass for this resource type
             self.exists = True
 
         assert self.index_id
@@ -140,7 +141,7 @@ class Role(IAMResource):
     def _get_index_id_from_name(self):
         return self.name
 
-    def create(self, wait: bool = True, **kwargs) -> str:
+    def create(self, wait: bool = True, **kwargs) -> Tuple[Dict, Optional[str]]:
         result = super().create(wait=wait, **kwargs)
         if 'Policies' in self.config:
             self.put_policies(self.config['Policies'])

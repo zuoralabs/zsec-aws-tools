@@ -204,7 +204,8 @@ class AWSResource(abc.ABC):
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self.index_id == other.index_id
 
-    def create(self, **kwargs) -> str:
+    def create(self, wait: bool = True, **kwargs) -> Tuple[Dict, Optional[str]]:
+        """Create the resource and return the response and index_id"""
         combined_kwargs = {self.name_key: self.name}
         combined_kwargs.update(self.config)
         combined_kwargs.update(kwargs)
@@ -213,9 +214,9 @@ class AWSResource(abc.ABC):
         client_method = getattr(self.service_client, "create_{}".format(self.sdk_name))
         resp = client_method(**combined_kwargs)
         # may or may not need to get self.top_key
-        result = resp.get(self.top_key, resp)[self.index_id_key]
+        index_id = resp.get(self.top_key, resp).get(self.index_id_key)
         self.exists = True
-        return result
+        return resp, index_id
 
     def delete(self, **kwargs):
         combined_kwargs = {self.name_key: self.name}
