@@ -21,8 +21,8 @@ def test_iam_policy():
 def test_boto3_iam_service_resource():
     """Not a test of my code, just a sanity check"""
     iamr = session.resource('iam', region_name='us-east-1')
-    policy_bresource = iamr.Policy("arn:aws:iam::aws:policy/ReadOnlyAccess")
-    assert policy_bresource.arn == "arn:aws:iam::aws:policy/ReadOnlyAccess"
+    policy_resource = iamr.Policy("arn:aws:iam::aws:policy/ReadOnlyAccess")
+    assert policy_resource.arn == "arn:aws:iam::aws:policy/ReadOnlyAccess"
 
 
 def test_iam_role():
