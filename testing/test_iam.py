@@ -58,8 +58,11 @@ def test_iam_role():
     with pytest.raises(Exception):
         role.put(wait=True, force=False)
 
-    role_arn = role.describe()[role.arn_key]
-    assert role_arn == role.boto3_resource().arn
+    assert role.arn.startswith("arn")
+    assert role.arn.endswith(role.name)
+
+    assert policy.arn.startswith("arn")
+    assert policy.arn.endswith(policy.name)
 
     assert policy in role.list_role_policies()
     assert zaws_iam.Policy(name='AWSDenyAll', session=session) not in role.list_role_policies()

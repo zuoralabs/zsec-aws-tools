@@ -78,6 +78,10 @@ class IAMResource(AwaitableAWSResource, AWSResource, abc.ABC):
         client_method = getattr(self.service_client, "get_{}".format(self.sdk_name))
         return client_method(**combined_kwargs)[self.top_key]
 
+    @property
+    def arn(self) -> str:
+        return self.boto3_resource().arn
+
     def put(self, wait: bool = True, force: bool = False):
         if self.exists:
             remote_description = self.describe()
