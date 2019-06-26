@@ -87,6 +87,10 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
         combined_kwargs.update(kwargs)
         return self.service_client.get_function(**combined_kwargs)
 
+    @property
+    def arn(self) -> str:
+        return self.describe()['Configuration']['FunctionArn']
+
     def create(self, wait: bool = True, **kwargs) -> str:
         while True:
             try:

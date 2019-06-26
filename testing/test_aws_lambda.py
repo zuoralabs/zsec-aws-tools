@@ -80,6 +80,11 @@ def test_aws_lambda():
                 Timeout=3,
             ))
         fn.put(force=True, wait=True)
+
+        arn = fn.arn
+        assert arn.endswith(fn.name)
+        assert arn.startswith("arn:aws:lambda:")
+
         resp = fn.invoke(json_codec=True, Payload={'a': 'a'})
         assert resp == "147306"
         fn.delete()
