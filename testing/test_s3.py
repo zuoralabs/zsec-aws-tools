@@ -19,7 +19,7 @@ def s3_bucket():
 
     account_id = get_account_id(session)
 
-    def bucket_policy(bucket_arn):
+    def bucket_policy(bucket: zaws_s3.Bucket):
         return {
             "Version": "2012-10-17",
             "Statement": [
@@ -38,8 +38,8 @@ def s3_bucket():
                         "s3:PutObjectAcl"
                     ],
                     "Resource": [
-                        bucket_arn,
-                        "{bucket_arn}/*".format(bucket_arn=bucket_arn),
+                        bucket.arn,
+                        "{bucket_arn}/*".format(bucket_arn=bucket.arn),
                     ],
                 }
             ]}
