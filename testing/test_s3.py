@@ -1,16 +1,11 @@
 import pytest
-import enum
 import boto3
-import zsec_aws_tools.waf as zwaf
-from zsec_aws_tools.waf import RuleElement
-from zsec_aws_tools import scroll
-import toolz
-from zsec_aws_tools.basic import get_account_id
-import zsec_aws_tools.s3 as zaws_s3
 import uuid
 import random
 import string
 import logging
+import zsec_aws_tools.s3 as zaws_s3
+from zsec_aws_tools.basic import get_account_id
 
 
 @pytest.fixture
@@ -75,5 +70,3 @@ def test_s3_bucket(s3_bucket, caplog):
     acl = s3_bucket.boto3_resource().Acl()
 
     #print(acl.grants)
-    print(s3_bucket)
-    assert 1
