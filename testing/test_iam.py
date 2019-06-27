@@ -34,7 +34,7 @@ def test_iam_role(managed_iam_policy: zaws_iam.Policy):
         name='test_lambda_1_role', session=session,
         ztid=uuid.UUID('42d02a7d-a8bf-c662-22fb-9ee83246bd8b'),
         config=dict(Path='/test/',
-                    AssumeRolePolicyDocument=json.dumps(default_assume_role_policy_document_for_lambda),
+                    AssumeRolePolicyDocument=default_assume_role_policy_document_for_lambda,
                     Policies=[managed_iam_policy]))
     role.put(wait=True)
 

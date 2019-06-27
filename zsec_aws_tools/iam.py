@@ -1,3 +1,4 @@
+import json
 import logging
 import boto3
 from typing import Dict, Iterable, Tuple, Optional
@@ -144,6 +145,12 @@ class Role(IAMResource):
 
     def _get_index_id_from_name(self):
         return self.name
+
+    def _process_config(self):
+        super()._process_config()
+        policy_document = self.config.get('AssumeRolePolicyDocument')
+        if policy_document is not None:
+            self.config['AssumeRolePolicyDocument'] = json.dumps(policy_document)
 
     def create(self, wait: bool = True, **kwargs) -> Tuple[Dict, Optional[str]]:
         result = super().create(wait=wait, **kwargs)
