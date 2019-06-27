@@ -1,12 +1,14 @@
 import boto3
 import abc
-from typing import Tuple, Dict, Optional, Iterable, Mapping, MappingView
+import json
+from typing import Tuple, Dict, Optional, Iterable, Mapping, MappingView, Callable
 from .cleaning import clean_up_stack
 import logging
 from toolz import first
 import time
 import uuid
 from types import MappingProxyType
+from .meta import get_operation_model, type_name_mapping
 
 logger = logging.getLogger(__name__)
 
@@ -287,6 +289,26 @@ class AWSResource(abc.ABC):
     def _process_config(self, config: Mapping) -> Mapping:
         processed_config = dict(config)
         processed_config[self.name_key] = self.name
+
+        for kk, vv in processed_config.items():
+            if kk not in self.non_creation_parameters:
+                operation_model = get_operation_model(self.service_client, 'create_{}'.format(self.sdk_name))
+                shape = operation_model.input_shape.members[kk]
+                _aws_input_type = type_name_mapping[shape.type_name]
+                while not isinstance(vv, _aws_input_type):
+                    if isinstance(vv, Callable):
+                        vv = vv(self)
+                    elif isinstance(vv, Mapping) and type(vv) is not dict:
+                        vv = dict(vv)
+                    elif isinstance(vv, (dict, list, int)) and _aws_input_type is str:
+                        vv = json.dumps(vv)
+                    elif isinstance(vv, str) and _aws_input_type is bytes:
+                        vv = vv.encode()
+                    else:
+                        vv = _aws_input_type(vv)
+
+                processed_config[kk] = vv
+
         return MappingProxyType(processed_config)
 
     @abc.abstractmethod

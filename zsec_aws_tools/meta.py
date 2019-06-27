@@ -1,3 +1,9 @@
+type_name_mapping = {'string': str,
+                     'long': int,
+                     'blob': bytes,
+                     'list': list,
+                     'double': int,
+                     }
 
 
 def get_operation_model(svc, fn):

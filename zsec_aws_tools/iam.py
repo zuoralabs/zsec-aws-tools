@@ -150,13 +150,6 @@ class Role(IAMResource):
     def _get_index_id_from_name(self):
         return self.name
 
-    def _process_config(self, config: Mapping) -> Mapping:
-        processed_config = dict(super()._process_config(config))
-        policy_document = processed_config.get('AssumeRolePolicyDocument')
-        if isinstance(policy_document, Mapping):
-            processed_config['AssumeRolePolicyDocument'] = json.dumps(policy_document)
-        return MappingProxyType(processed_config)
-
     def create(self, wait: bool = True, **kwargs) -> Tuple[Dict, Optional[str]]:
         result = super().create(wait=wait, **kwargs)
         if 'Policies' in self.processed_config:
