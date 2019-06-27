@@ -1,6 +1,7 @@
 import pytest
 import boto3
 import zsec_aws_tools.iam as zaws_iam
+from zsec_aws_tools.aws_lambda import default_assume_role_policy_document_for_lambda
 from zsec_aws_tools.basic import manager_tag_key
 import json
 import uuid
@@ -26,19 +27,6 @@ def test_boto3_iam_service_resource():
 
 
 def test_iam_role():
-    assume_role_policy_document = {
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Effect": "Allow",
-                "Principal": {
-                    "Service": "lambda.amazonaws.com"
-                },
-                "Action": "sts:AssumeRole"
-            }
-        ]
-    }
-
     iamr = session.resource('iam', region_name='us-east-1')
     policy = zaws_iam.Policy(name='ReadOnlyAccess', session=session)
 
@@ -47,7 +35,7 @@ def test_iam_role():
         name='test_lambda_1_role', session=session,
         ztid=uuid.UUID('42d02a7d-a8bf-c662-22fb-9ee83246bd8b'),
         config=dict(Path='/test/',
-                    AssumeRolePolicyDocument=json.dumps(assume_role_policy_document),
+                    AssumeRolePolicyDocument=json.dumps(default_assume_role_policy_document_for_lambda),
                     Policies=[policy]))
     role.put(wait=True)
 

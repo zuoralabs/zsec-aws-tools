@@ -193,3 +193,17 @@ def zip_compress(source: Path, output: Union[Path, io.IOBase]) -> None:
                     zf.write(pp, arcname=pp.relative_to(Path('src')))
         else:
             zf.write(source, arcname=str(source))
+
+
+default_assume_role_policy_document_for_lambda = {
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "lambda.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+        }
+    ]
+}
