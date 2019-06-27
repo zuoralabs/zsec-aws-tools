@@ -3,6 +3,10 @@ type_name_mapping = {'string': str,
                      'blob': bytes,
                      'list': list,
                      'double': int,
+                     'structure': dict,
+                     'map': dict,
+                     'integer': int,
+                     'timestamp': str,  # not sure about this
                      }
 
 
