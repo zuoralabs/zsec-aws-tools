@@ -10,6 +10,7 @@ import abc
 from .meta import apply_with_relevant_kwargs
 
 logger = logging.getLogger(__name__)
+MAX_POLICY_VERSION_COUNT = 5  # set by Amazon
 
 CREDENTIALS_TEMPLATE = """
 [{profile}]
@@ -117,6 +118,16 @@ class IAMResource(AwaitableAWSResource, AWSResource, abc.ABC):
 
 
 class Policy(IAMResource):
+    """
+    See also
+
+    - `IAM.Policy`__
+    - `IAM.UserPolicy`__
+
+    __ https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/iam.html#policy
+    __ https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/iam.html#userpolicy
+
+    """
     top_key: str = 'Policy'
     id_key: str = 'PolicyId'
     name_key: str = 'PolicyName'
@@ -135,7 +146,17 @@ class Policy(IAMResource):
             return None
 
     def update(self):
-        raise NotImplementedError
+        br_policy = self.boto3_resource()
+
+        # Make room for new version if necessary
+        existing_versions = list(br_policy.versions.all())
+        if MAX_POLICY_VERSION_COUNT <= len(existing_versions):
+            existing_versions[0].delete()
+
+        policy_version = br_policy.create_version(
+            PolicyDocument=self.processed_config['PolicyDocument'],
+            SetAsDefault=True,
+        )
 
 
 class Role(IAMResource):
