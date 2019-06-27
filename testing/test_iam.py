@@ -11,14 +11,14 @@ session = boto3.Session(profile_name='test', region_name='us-east-1')
 
 
 @pytest.fixture
-def managed_iam_policy() -> Generator[zaws_iam.Policy, None, None]:
+def aws_managed_iam_policy() -> Generator[zaws_iam.Policy, None, None]:
     policy = zaws_iam.Policy(name='ReadOnlyAccess', session=session)
     yield policy
 
 
-def test_iam_policy(managed_iam_policy: zaws_iam.Policy):
-    assert managed_iam_policy.exists
-    assert managed_iam_policy.describe()['Arn'] == "arn:aws:iam::aws:policy/ReadOnlyAccess"
+def test_iam_policy(aws_managed_iam_policy):
+    assert aws_managed_iam_policy.exists
+    assert aws_managed_iam_policy.describe()['Arn'] == "arn:aws:iam::aws:policy/ReadOnlyAccess"
 
 
 def test_boto3_iam_service_resource():
@@ -28,14 +28,14 @@ def test_boto3_iam_service_resource():
     assert policy_resource.arn == "arn:aws:iam::aws:policy/ReadOnlyAccess"
 
 
-def test_iam_role(managed_iam_policy: zaws_iam.Policy):
+def test_iam_role(aws_managed_iam_policy):
     'test_iam_role_1_role'
     role = zaws_iam.Role(
         name='test_lambda_1_role', session=session,
         ztid=uuid.UUID('42d02a7d-a8bf-c662-22fb-9ee83246bd8b'),
         config=dict(Path='/test/',
                     AssumeRolePolicyDocument=default_assume_role_policy_document_for_lambda,
-                    Policies=[managed_iam_policy]))
+                    Policies=[aws_managed_iam_policy]))
     role.put(wait=True)
 
     # change the manager tag
@@ -48,10 +48,10 @@ def test_iam_role(managed_iam_policy: zaws_iam.Policy):
     assert role.arn.startswith("arn")
     assert role.arn.endswith(role.name)
 
-    assert managed_iam_policy.arn.startswith("arn")
-    assert managed_iam_policy.arn.endswith(managed_iam_policy.name)
+    assert aws_managed_iam_policy.arn.startswith("arn")
+    assert aws_managed_iam_policy.arn.endswith(aws_managed_iam_policy.name)
 
-    assert managed_iam_policy in role.list_role_policies()
+    assert aws_managed_iam_policy in role.list_role_policies()
     assert zaws_iam.Policy(name='AWSDenyAll', session=session) not in role.list_role_policies()
 
     iamr = session.resource('iam', region_name='us-east-1')
