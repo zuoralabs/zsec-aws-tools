@@ -232,7 +232,8 @@ class AWSResource(abc.ABC):
         client_method = getattr(self.service_client, "create_{}".format(self.sdk_name))
         resp = client_method(**combined_kwargs)
         # may or may not need to get self.top_key
-        index_id = resp.get(self.top_key, resp).get(self.index_id_key)
+        index_id = resp.get(self.top_key, resp).get(
+            self.index_id_key, self.name if self.index_id_key == self.name_key else None)
         if wait:
             self.wait_until_exists()
 
