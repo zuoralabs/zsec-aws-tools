@@ -60,8 +60,8 @@ class Bucket(AwaitableAWSResource, AWSResource):
             resp, _ = self.create(wait=wait)   # no index_id returned by CreateBucket.
             self.exists = True
 
-        if 'Policy' in self.config:
-            policy = json.dumps(self.config['Policy'](self))
+        if 'Policy' in self.processed_config:
+            policy = json.dumps(self.processed_config['Policy'](self))
             self.boto3_resource().Policy().put(Policy=policy)
 
     def wait_until_not_exists(self) -> None:

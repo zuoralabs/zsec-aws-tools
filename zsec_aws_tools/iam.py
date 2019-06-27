@@ -1,12 +1,13 @@
 import json
 import logging
 import boto3
-from typing import Dict, Iterable, Tuple, Optional
+from typing import Dict, Iterable, Tuple, Optional, Mapping
+from types import MappingProxyType
 from .basic import AWSResource, scroll, AwaitableAWSResource, add_ztid_tags, add_manager_tags, manager_tag_key
-from toolz import first
+from toolz import first, thread_last, pipe
+from toolz.curried import assoc
 import abc
 from .meta import apply_with_relevant_kwargs
-
 
 logger = logging.getLogger(__name__)
 
@@ -63,15 +64,18 @@ class IAMResource(AwaitableAWSResource, AWSResource, abc.ABC):
     arn_key: str = 'Arn'
     not_found_exception_name = 'NoSuchEntityException'
 
-    def _process_config(self):
-        add_manager_tags(self)
-        add_ztid_tags(self)
+    def _process_config(self, config: Mapping) -> Mapping:
+        processed_config_1 = thread_last(config,
+                                         (add_manager_tags, self), (add_ztid_tags, self))
 
         # Hack to convert to IAM type tag argument conventions. Should change `add_manager_tags` and
         # `add_ztid_tags` instead.
-        self.config['Tags'] = [{'Key': k, 'Value': v} for k, v in self.config['Tags'].items()]
+        tags = [{'Key': k, 'Value': v} for k, v in processed_config_1['Tags'].items()]
+        processed_config_2 = pipe(processed_config_1,
+                                  assoc(key='Tags', value=tags),
+                                  super()._process_config)
 
-        super()._process_config()
+        return processed_config_2
 
     def describe(self, **kwargs) -> Dict:
         combined_kwargs = {self.index_id_key: self.index_id}
@@ -86,9 +90,9 @@ class IAMResource(AwaitableAWSResource, AWSResource, abc.ABC):
     def put(self, wait: bool = True, force: bool = False):
         if self.exists:
             remote_description = self.describe()
-            remote_tags = {tag['Key']: tag['Value'] for tag in remote_description['Tags']}
+            remote_tags = {tag['Key']: tag['Value'] for tag in remote_description.get('Tags', ())}
 
-            tags = {tag['Key']: tag['Value'] for tag in self.config['Tags']}
+            tags = {tag['Key']: tag['Value'] for tag in self.processed_config['Tags']}
 
             if not force:
                 if remote_tags.get(manager_tag_key) != tags[manager_tag_key]:
@@ -146,34 +150,35 @@ class Role(IAMResource):
     def _get_index_id_from_name(self):
         return self.name
 
-    def _process_config(self):
-        super()._process_config()
-        policy_document = self.config.get('AssumeRolePolicyDocument')
-        if policy_document is not None:
-            self.config['AssumeRolePolicyDocument'] = json.dumps(policy_document)
+    def _process_config(self, config: Mapping) -> Mapping:
+        processed_config = dict(super()._process_config(config))
+        policy_document = processed_config.get('AssumeRolePolicyDocument')
+        if isinstance(policy_document, Mapping):
+            processed_config['AssumeRolePolicyDocument'] = json.dumps(policy_document)
+        return MappingProxyType(processed_config)
 
     def create(self, wait: bool = True, **kwargs) -> Tuple[Dict, Optional[str]]:
         result = super().create(wait=wait, **kwargs)
-        if 'Policies' in self.config:
-            self.put_policies(self.config['Policies'])
+        if 'Policies' in self.processed_config:
+            self.put_policies(self.processed_config['Policies'])
         return result
 
     def update(self):
-        update_kwargs = self.config.copy()
+        update_kwargs = dict(self.processed_config)
         update_kwargs['PolicyDocument'] = update_kwargs['AssumeRolePolicyDocument']
         apply_with_relevant_kwargs(self.service_client, self.service_client.update_role,
-                                   self.config, ignore_when_missing_required_keys=True)
+                                   self.processed_config, ignore_when_missing_required_keys=True)
 
         apply_with_relevant_kwargs(self.service_client, self.service_client.update_assume_role_policy,
-                                   self.config, ignore_when_missing_required_keys=True)
+                                   self.processed_config, ignore_when_missing_required_keys=True)
 
         apply_with_relevant_kwargs(self.service_client, self.service_client.tag_role,
-                                   self.config, ignore_when_missing_required_keys=True)
+                                   self.processed_config, ignore_when_missing_required_keys=True)
 
         apply_with_relevant_kwargs(self.service_client, self.service_client.put_role_permissions_boundary,
-                                   self.config, ignore_when_missing_required_keys=True)
+                                   self.processed_config, ignore_when_missing_required_keys=True)
 
-        self.put_policies(self.config['Policies'])
+        self.put_policies(self.processed_config['Policies'])
 
     def attach_policy(self, arn):
         self.service_client.attach_role_policy(**{self.name_key: self.name, 'PolicyArn': arn})

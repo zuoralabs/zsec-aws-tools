@@ -1,6 +1,8 @@
 import logging
-from typing import Dict, Union
 import io
+from typing import Dict, Union, Mapping
+from toolz import pipe, partial, thread_last
+from toolz.curried import assoc
 from .basic import (scroll, AWSResource, AwaitableAWSResource, manager_tag_key,
                     add_manager_tags, add_ztid_tags)
 import zipfile
@@ -52,21 +54,22 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
     role: Role
     existence_waiter_name = 'function_exists'
 
-    def _process_config(self):
-        self.role = role = self.config['Role']
+    def _process_config(self, config: Mapping) -> Mapping:
+        self.role = role = config['Role']
         assert isinstance(self.role, Role)
-        role_arn = role.describe()[role.arn_key]
-        self.config['Role'] = role_arn
 
-        add_manager_tags(self)
-        add_ztid_tags(self)
+        processed_config = thread_last(config,
+                                       assoc(key='Role', value=role.arn),
+                                       (add_manager_tags, self),
+                                       (add_ztid_tags, self),
+                                       super()._process_config)
 
-        super()._process_config()
+        return processed_config
 
     def _get_index_id_from_name(self):
         return self.name
 
-    def _just_need_to_wait(self, err):
+    def _just_need_to_wait(self, err) -> bool:
         """Determines if we got a real error or if we just need to wait and retry
 
         See
@@ -80,7 +83,8 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
                 and any((statement['Effect'] == 'Allow'
                          and statement['Principal'].get('Service') == "lambda.amazonaws.com"
                          and statement['Action'] == "sts:AssumeRole")
-                        for statement in json.loads(self.role.config['AssumeRolePolicyDocument'])['Statement']))
+                        for statement in
+                        json.loads(self.role.processed_config['AssumeRolePolicyDocument'])['Statement']))
 
     def describe(self, **kwargs) -> Dict:
         combined_kwargs = {self.index_id_key: self.index_id}
@@ -107,13 +111,13 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
 
     def put(self, wait: bool = True, force: bool = False):
         if self.exists:
-            kwargs = self.config
+            kwargs = self.processed_config
             remote_description = self.describe()
             remote_tags = remote_description['Tags']
             remote_configuration = remote_description['Configuration']
             arn = remote_configuration['FunctionArn']
 
-            tags = self.config['Tags']
+            tags = self.processed_config['Tags']
 
             if not force:
                 if remote_tags.get(manager_tag_key) != tags[manager_tag_key]:

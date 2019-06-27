@@ -1,6 +1,7 @@
 import pytest
 import boto3
 import zsec_aws_tools.iam as zaws_iam
+from toolz import assoc
 from zsec_aws_tools.aws_lambda import default_assume_role_policy_document_for_lambda
 from zsec_aws_tools.basic import manager_tag_key
 from typing import Generator
@@ -39,9 +40,9 @@ def test_iam_role(aws_managed_iam_policy):
     role.put(wait=True)
 
     # change the manager tag
-    tags = {tag['Key']: tag['Value'] for tag in role.config['Tags']}
-    tags[manager_tag_key] = 'alt_manager'
-    role.config['Tags'] = [{'Key': k, 'Value': v} for k, v in tags.items()]
+    tags = {manager_tag_key: 'alt_manager'}
+    role.config = assoc(role.config, 'Tags', tags)
+    assert {tag['Key']: tag['Value'] for tag in role.processed_config['Tags']}[manager_tag_key] == 'alt_manager'
     with pytest.raises(Exception):
         role.put(wait=True, force=False)
 

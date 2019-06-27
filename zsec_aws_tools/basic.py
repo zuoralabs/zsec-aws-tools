@@ -1,11 +1,12 @@
 import boto3
 import abc
-from typing import Tuple, Dict, Optional, Iterable
+from typing import Tuple, Dict, Optional, Iterable, Mapping, MappingView
 from .cleaning import clean_up_stack
 import logging
 from toolz import first
 import time
 import uuid
+from types import MappingProxyType
 
 logger = logging.getLogger(__name__)
 
@@ -186,8 +187,23 @@ class AWSResource(abc.ABC):
                 self.index_id = ''
                 self.exists = False
 
-        self.config = config or {}
-        self._process_config()
+        self.config = MappingProxyType(config or {})
+
+    @property
+    def config(self) -> Mapping:
+        return self._config
+
+    @config.setter
+    def config(self, config: Mapping) -> None:
+        self._config = config
+        # flush cache for processed_config when config is set.
+        self._processed_config = None
+
+    @property
+    def processed_config(self) -> Mapping:
+        if self._processed_config is None:
+            self._processed_config = self._process_config(self.config)
+        return self._processed_config
 
     def _detect_existence_using_index_id(self) -> bool:
         """Returns whether the resource exists.
@@ -207,7 +223,7 @@ class AWSResource(abc.ABC):
     def create(self, wait: bool = True, **kwargs) -> Tuple[Dict, Optional[str]]:
         """Create the resource and return the response and index_id"""
         combined_kwargs = {self.name_key: self.name}
-        combined_kwargs.update(self.config)
+        combined_kwargs.update(self.processed_config)
         combined_kwargs.update(kwargs)
         for key in self.non_creation_parameters:
             combined_kwargs.pop(key, None)
@@ -268,8 +284,10 @@ class AWSResource(abc.ABC):
         """
         pass
 
-    def _process_config(self) -> None:
-        self.config[self.name_key] = self.name
+    def _process_config(self, config: Mapping) -> Mapping:
+        processed_config = dict(config)
+        processed_config[self.name_key] = self.name
+        return MappingProxyType(processed_config)
 
     @abc.abstractmethod
     def put(self, wait: bool = True, force: bool = False):
@@ -303,15 +321,19 @@ class AwaitableAWSResource(AWSResource, abc.ABC):
         self.wait(self.existence_waiter_name)
 
 
-def add_manager_tags(res: AWSResource):
+def add_manager_tags(res: AWSResource, config: Mapping) -> Mapping:
     """Set default Manager tag if it doesn't exist"""
-    tags = {manager_tag_key: zsec_tools_manager_tag_value}
-    tags.update(res.config.get('Tags', {}))  # original config takes precedence if there is a conflict
-    res.config['Tags'] = tags
+    tags = {manager_tag_key: zsec_tools_manager_tag_value,
+            **config.get('Tags', {})}  # original config takes precedence if there is a conflict
+    processed_config = dict(config)
+    processed_config['Tags'] = tags
+    return processed_config
 
 
-def add_ztid_tags(res: AWSResource):
+def add_ztid_tags(res: AWSResource, config: Mapping) -> Mapping:
     """Set default Manager tag if it doesn't exist"""
-    tags = {'ztid': str(res.ztid or uuid.uuid4())}
-    tags.update(res.config.get('Tags', {}))  # original config takes precedence if there is a conflict
-    res.config['Tags'] = tags
+    tags = {'ztid': str(res.ztid or uuid.uuid4()),
+            **config.get('Tags', {})}  # original config takes precedence if there is a conflict
+    processed_config = dict(config)
+    processed_config['Tags'] = tags
+    return processed_config
