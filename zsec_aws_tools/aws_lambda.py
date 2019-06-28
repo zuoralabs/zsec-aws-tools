@@ -1,10 +1,10 @@
 import logging
 import io
 from typing import Dict, Union, Mapping
-from toolz import pipe, partial, thread_last
+from toolz import pipe, partial, thread_last, merge
 from toolz.curried import assoc
 from .basic import (scroll, AWSResource, AwaitableAWSResource, manager_tag_key,
-                    add_manager_tags, add_ztid_tags)
+                    standard_tags)
 import zipfile
 from pathlib import Path
 import hashlib
@@ -58,16 +58,23 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
         self.role = role = config['Role']
         assert isinstance(self.role, Role)
 
-        processed_config = thread_last(config,
-                                       assoc(key='Role', value=role.arn),
-                                       (add_manager_tags, self),
-                                       (add_ztid_tags, self),
-                                       super()._process_config)
+        processed_config = pipe(config,
+                                assoc(key='Role', value=role.arn),
+                                assoc(key='Tags', value=merge(standard_tags(self.ztid), config.get('Tags', {}))),
+                                # original tags takes precedence if there is a conflict
+                                super()._process_config)
 
         return processed_config
 
     def _get_index_id_from_name(self):
         return self.name
+
+    def _get_index_id_from_ztid(self):
+        for description in scroll(self.service_client.list_functions):
+            tags = description.get('Tags',
+                                   self.service_client.list_tags(Resource=description['FunctionArn'])['Tags'])
+            if tags.get('ztid') == self.ztid:
+                return description[self.index_id_key]
 
     def _just_need_to_wait(self, err) -> bool:
         """Determines if we got a real error or if we just need to wait and retry

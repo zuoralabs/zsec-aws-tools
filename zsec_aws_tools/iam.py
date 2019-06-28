@@ -3,8 +3,8 @@ import logging
 import boto3
 from typing import Dict, Iterable, Tuple, Optional, Mapping
 from types import MappingProxyType
-from .basic import AWSResource, scroll, AwaitableAWSResource, add_ztid_tags, add_manager_tags, manager_tag_key
-from toolz import first, thread_last, pipe
+from .basic import AWSResource, scroll, AwaitableAWSResource, standard_tags, manager_tag_key, get_account_id
+from toolz import first, thread_last, pipe, merge
 from toolz.curried import assoc
 import abc
 from .meta import apply_with_relevant_kwargs
@@ -64,19 +64,7 @@ class IAMResource(AwaitableAWSResource, AWSResource, abc.ABC):
     client_name: str = 'iam'
     arn_key: str = 'Arn'
     not_found_exception_name = 'NoSuchEntityException'
-
-    def _process_config(self, config: Mapping) -> Mapping:
-        processed_config_1 = thread_last(config,
-                                         (add_manager_tags, self), (add_ztid_tags, self))
-
-        # Hack to convert to IAM type tag argument conventions. Should change `add_manager_tags` and
-        # `add_ztid_tags` instead.
-        tags = [{'Key': k, 'Value': v} for k, v in processed_config_1['Tags'].items()]
-        processed_config_2 = pipe(processed_config_1,
-                                  assoc(key='Tags', value=tags),
-                                  super()._process_config)
-
-        return processed_config_2
+    tags_key: str = 'Tags'
 
     def describe(self, **kwargs) -> Dict:
         combined_kwargs = {self.index_id_key: self.index_id}
@@ -93,7 +81,14 @@ class IAMResource(AwaitableAWSResource, AWSResource, abc.ABC):
             remote_description = self.describe()
             remote_tags = {tag['Key']: tag['Value'] for tag in remote_description.get('Tags', ())}
 
-            tags = {tag['Key']: tag['Value'] for tag in self.processed_config['Tags']}
+            raw_tags = self.processed_config[self.tags_key]
+
+            if isinstance(raw_tags, dict):
+                tags = {tag['Key']: tag['Value'] for tag in raw_tags}
+            elif isinstance(raw_tags, str):
+                tags = json.loads(raw_tags)
+            else:
+                raise TypeError
 
             if not force:
                 if remote_tags.get(manager_tag_key) != tags[manager_tag_key]:
@@ -134,9 +129,22 @@ class Policy(IAMResource):
     sdk_name: str = 'policy'
     index_id_key = 'PolicyArn'
     existence_waiter_name = 'policy_exists'
+    tags_key = 'Description'
 
     def _get_index_id_from_name(self):
-        return self._get_description_from_name()['Arn']
+        maybe_dsecription = self._get_description_from_name()
+        if maybe_dsecription:
+            return maybe_dsecription['Arn']
+
+    def _get_index_id_from_ztid(self):
+        service_resource = self.session.resource(self.client_name, region_name=self.region_name)
+        for br_policy in service_resource.policies.all():
+            #scroll(self.service_client.list_policies, Scope='Local')
+            description = br_policy.description
+            if description:
+                tags = json.loads(description).get(self.tags_key, {})
+                if tags.get('ztid') == self.ztid:
+                    return br_policy.arn
 
     def _get_description_from_name(self):
         policies = scroll(self.service_client.list_policies)
@@ -144,6 +152,13 @@ class Policy(IAMResource):
             return first(filter(lambda x: x['PolicyName'] == self.name, policies))
         except StopIteration:
             return None
+
+    def _process_config(self, config: Mapping) -> Mapping:
+        tags_dict = merge(standard_tags(self.ztid), config.get('Description', {}))
+        processed_config = pipe(config,
+                                assoc(key='Description', value=tags_dict),
+                                super()._process_config)
+        return processed_config
 
     def update(self):
         br_policy = self.boto3_resource()
@@ -158,6 +173,24 @@ class Policy(IAMResource):
             SetAsDefault=True,
         )
 
+    @property
+    def arn(self) -> str:
+        return super().arn or "arn:aws:iam::{}:policy{}/{}".format(
+            get_account_id(self.session),
+            self.processed_config.get('Path', ''),
+            self.name,)
+
+    def wait_until_exists(self):
+        self.wait(self.existence_waiter_name, PolicyArn=self.arn)
+
+    def delete(self, not_exists_ok: bool = False, **kwargs) -> Optional[Dict]:
+        # Make room for new version if necessary
+        for version in self.boto3_resource().versions.all():
+            if not version.is_default_version:
+                version.delete()
+
+        super().delete(not_exists_ok=not_exists_ok, **kwargs)
+
 
 class Role(IAMResource):
     top_key: str = 'Role'
@@ -170,6 +203,20 @@ class Role(IAMResource):
 
     def _get_index_id_from_name(self):
         return self.name
+
+    def _get_index_id_from_ztid(self):
+        for description in scroll(self.service_client.list_roles):
+            tags = description['Tags']
+            if tags.get('ztid') == self.ztid:
+                return description[self.index_id_key]
+
+    def _process_config(self, config: Mapping) -> Mapping:
+        tags_dict = merge(standard_tags(self.ztid), config.get('Tags', {}))
+        tags_list = [{'Key': k, 'Value': v} for k, v in tags_dict.items()]
+        processed_config = pipe(config,
+                                assoc(key='Tags', value=tags_list),
+                                super()._process_config)
+        return processed_config
 
     def create(self, wait: bool = True, **kwargs) -> Tuple[Dict, Optional[str]]:
         result = super().create(wait=wait, **kwargs)

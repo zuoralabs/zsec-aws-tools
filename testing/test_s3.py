@@ -70,3 +70,16 @@ def test_s3_bucket(s3_bucket, caplog):
     acl = s3_bucket.boto3_resource().Acl()
 
     #print(acl.grants)
+
+
+def test_existing_s3_bucket(s3_bucket, caplog):
+    s3_bucket.put()
+
+    copy = zaws_s3.Bucket(session=s3_bucket.session, region_name=s3_bucket.region_name,
+                          name=s3_bucket.name,
+                          ztid=s3_bucket.ztid,
+                          config=s3_bucket.config)
+
+    assert copy._get_index_id_from_ztid() == copy.name
+
+    assert copy.exists

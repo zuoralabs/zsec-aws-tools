@@ -4,7 +4,7 @@ import json
 from typing import Tuple, Dict, Optional, Iterable, Mapping, MappingView, Callable
 from .cleaning import clean_up_stack
 import logging
-from toolz import first
+from toolz import first, assoc
 import time
 import uuid
 from types import MappingProxyType
@@ -179,9 +179,13 @@ class AWSResource(abc.ABC):
                 self.name = self.describe()[self.name_key]
             if name:
                 assert self.name == name
-        elif name:
+        else:
+            assert name
             self.name = name
-            maybe_index_value = self._get_index_id_from_name()
+            maybe_index_value = self._get_index_id_from_ztid() if ztid else None
+            if maybe_index_value is None:
+                maybe_index_value = self._get_index_id_from_name()
+
             if maybe_index_value:
                 self.index_id = maybe_index_value
                 self.exists = True
@@ -232,16 +236,20 @@ class AWSResource(abc.ABC):
         client_method = getattr(self.service_client, "create_{}".format(self.sdk_name))
         resp = client_method(**combined_kwargs)
         # may or may not need to get self.top_key
-        index_id = resp.get(self.top_key, resp).get(
-            self.index_id_key, self.name if self.index_id_key == self.name_key else None)
+        description = resp.get(self.top_key, resp)
+        index_id = description.get(self.index_id_key)
+        if index_id is None:
+            for key, value in description.items():
+                if self.index_id_key.endswith(key) or key.endswith(self.index_id_key):
+                    index_id = value
+                    break
         if wait:
             self.wait_until_exists()
-
         self.exists = True
         return resp, index_id
 
     def delete(self, not_exists_ok: bool = False, **kwargs) -> Optional[Dict]:
-        combined_kwargs = {self.name_key: self.name}
+        combined_kwargs = {self.index_id_key: self.index_id}
         combined_kwargs.update(kwargs)
         client_method = getattr(self.service_client, "delete_{}".format(self.sdk_name))
         try:
@@ -269,11 +277,22 @@ class AWSResource(abc.ABC):
             old_version.delete()
 
     @abc.abstractmethod
+    def _get_index_id_from_ztid(self) -> Optional[str]:
+        """Return ID using self.name
+
+        Requires that self.ztid is set and that it is unique.
+        Should only be called during `__init__` to set `self.index_id`.
+        If it returns a string, it means this resource exists.
+
+        """
+        pass
+
+    @abc.abstractmethod
     def _get_index_id_from_name(self) -> Optional[str]:
         """Return ID using self.name
 
         Requires that self.name is set and that it is unique.
-        Should only be called during `__init__` to set `self.id_`.
+        Should only be called during `__init__` to set `self.index_id`.
         If it returns a string, it means this resource exists.
 
         """
@@ -344,19 +363,7 @@ class AwaitableAWSResource(AWSResource, abc.ABC):
         self.wait(self.existence_waiter_name)
 
 
-def add_manager_tags(res: AWSResource, config: Mapping) -> Mapping:
-    """Set default Manager tag if it doesn't exist"""
-    tags = {manager_tag_key: zsec_tools_manager_tag_value,
-            **config.get('Tags', {})}  # original config takes precedence if there is a conflict
-    processed_config = dict(config)
-    processed_config['Tags'] = tags
-    return processed_config
-
-
-def add_ztid_tags(res: AWSResource, config: Mapping) -> Mapping:
-    """Set default Manager tag if it doesn't exist"""
-    tags = {'ztid': str(res.ztid or uuid.uuid4()),
-            **config.get('Tags', {})}  # original config takes precedence if there is a conflict
-    processed_config = dict(config)
-    processed_config['Tags'] = tags
-    return processed_config
+def standard_tags(ztid) -> Mapping:
+    """Provide Manager and ztid tags"""
+    return {manager_tag_key: zsec_tools_manager_tag_value,
+            'ztid': str(ztid or uuid.uuid4())}

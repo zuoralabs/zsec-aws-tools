@@ -17,9 +17,35 @@ def aws_managed_iam_policy() -> Generator[zaws_iam.Policy, None, None]:
     yield policy
 
 
-def test_iam_policy(aws_managed_iam_policy):
+@pytest.fixture
+def local_iam_policy() -> Generator[zaws_iam.Policy, None, None]:
+    policy = zaws_iam.Policy(name='TestPolicy-abtasxabatsawk',
+                             session=session,
+                             ztid=uuid.UUID('41294B17-2288-4871-AC10-1C3209E99095'),
+                             config=dict(PolicyDocument={
+                                 "Version": "2012-10-17",
+                                 "Statement": [
+                                     {
+                                         "Sid": "AllowLambda",
+                                         "Action": "lambda:*",
+                                         "Effect": "Allow",
+                                         "Resource": "*"
+                                     }
+                                 ]
+                             }))
+    yield policy
+    policy.delete(not_exists_ok=True)
+
+
+def test_aws_managed_iam_policy(aws_managed_iam_policy):
     assert aws_managed_iam_policy.exists
     assert aws_managed_iam_policy.describe()['Arn'] == "arn:aws:iam::aws:policy/ReadOnlyAccess"
+
+
+def test_locally_managed_iam_policy(local_iam_policy):
+    local_iam_policy.put(force=True)
+    assert local_iam_policy.exists
+    assert local_iam_policy.describe()['Arn'] == local_iam_policy.arn
 
 
 def test_boto3_iam_service_resource():
