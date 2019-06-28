@@ -57,8 +57,9 @@ class Bucket(AwaitableAWSResource, AWSResource):
                 else:
                     raise
             else:
-                for _ in (ts['Value'] for ts in tag_set if ts['Key'] == 'ztid'):
-                    return bucket.name
+                for ztid in (ts['Value'] for ts in tag_set if ts['Key'] == 'ztid'):
+                    if ztid == self.ztid:
+                        return bucket.name
                 else:
                     continue
 
