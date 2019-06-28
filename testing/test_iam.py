@@ -66,8 +66,7 @@ def test_iam_role(aws_managed_iam_policy):
     role.put(wait=True)
 
     # change the manager tag
-    tags = {manager_tag_key: 'alt_manager'}
-    role.config = assoc(role.config, 'Tags', tags)
+    role.manager = 'alt_manager'
     assert {tag['Key']: tag['Value'] for tag in role.processed_config['Tags']}[manager_tag_key] == 'alt_manager'
     with pytest.raises(Exception):
         role.put(wait=True, force=False)

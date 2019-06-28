@@ -62,7 +62,7 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
 
         processed_config = pipe(config,
                                 assoc(key='Role', value=role.arn),
-                                assoc(key='Tags', value=merge(standard_tags(self.ztid), config.get('Tags', {}))),
+                                assoc(key='Tags', value=merge(standard_tags(self), config.get('Tags', {}))),
                                 # original tags takes precedence if there is a conflict
                                 super()._process_config)
 

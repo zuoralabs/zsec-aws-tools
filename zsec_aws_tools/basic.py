@@ -152,7 +152,8 @@ class AWSResource(abc.ABC):
                  ztid: Optional[uuid.UUID] = None,
                  old_names=(),
                  config: Optional[Mapping] = None,
-                 assume_exists: bool = False):
+                 assume_exists: bool = False,
+                 manager: str = zsec_tools_manager_tag_value):
         """
         WARNING: if given, name is assumed to identify the condition set, although this is not always true
 
@@ -162,6 +163,7 @@ class AWSResource(abc.ABC):
         self.region_name = region_name
         self.service_client = session.client(self.client_name, region_name=region_name)
         self.ztid = ztid
+        self.manager = manager
 
         self.old_versions = [
             self.__class__(session=session, region_name=region_name, name=old_name)
@@ -199,6 +201,16 @@ class AWSResource(abc.ABC):
                     raise ValueError("{} assumed to exist, but it does not exist.".format(self))
 
         self.config = MappingProxyType(config or {})
+
+    @property
+    def manager(self) -> str:
+        return self._manager
+
+    @manager.setter
+    def manager(self, value: str):
+        self._manager = value
+        # flush cache for processed_config when config is set.
+        self._processed_config = None
 
     @property
     def config(self) -> Mapping:
@@ -259,7 +271,7 @@ class AWSResource(abc.ABC):
         client_method = getattr(self.service_client, "delete_{}".format(self.sdk_name))
         try:
             result = client_method(**combined_kwargs)
-        except getattr(self.service_client.exceptions, self.not_found_exception_name) as err:
+        except getattr(self.service_client.exceptions, self.not_found_exception_name):
             if not not_exists_ok:
                 raise
             else:
@@ -374,7 +386,7 @@ class AwaitableAWSResource(AWSResource, abc.ABC):
         self.wait(self.existence_waiter_name)
 
 
-def standard_tags(ztid) -> Mapping:
+def standard_tags(res: AWSResource) -> Mapping:
     """Provide Manager and ztid tags"""
-    return {manager_tag_key: zsec_tools_manager_tag_value,
-            'ztid': str(ztid or uuid.uuid4())}
+    return {manager_tag_key: res.manager,
+            'ztid': str(res.ztid or uuid.uuid4())}

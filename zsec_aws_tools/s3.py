@@ -94,7 +94,7 @@ class Bucket(AwaitableAWSResource, AWSResource):
         yield from filter(None, results)
 
     def _process_config(self, config: Mapping) -> Mapping:
-        tags_dict = merge(standard_tags(self.ztid), config.get('Tags', {}))
+        tags_dict = merge(standard_tags(self), config.get('Tags', {}))
         tags_list = [{'Key': k, 'Value': v} for k, v in tags_dict.items()]
         processed_config = pipe(config,
                                 assoc(key='Tags', value=tags_list),

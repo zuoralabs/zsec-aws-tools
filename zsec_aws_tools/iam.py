@@ -2,9 +2,11 @@ import json
 import logging
 import boto3
 import uuid
+from functools import partialmethod, partial
 from typing import Dict, Iterable, Tuple, Optional, Mapping, Generator
 from types import MappingProxyType
-from .basic import AWSResource, scroll, AwaitableAWSResource, standard_tags, manager_tag_key, get_account_id
+from .basic import (AWSResource, scroll, AwaitableAWSResource, standard_tags, manager_tag_key, get_account_id,
+                    zsec_tools_manager_tag_value)
 from toolz import first, thread_last, pipe, merge
 from toolz.curried import assoc
 import abc
@@ -80,23 +82,11 @@ class IAMResource(AwaitableAWSResource, AWSResource, abc.ABC):
 
     def put(self, wait: bool = True, force: bool = False):
         if self.exists:
-            remote_description = self.describe()
-            remote_tags = {tag['Key']: tag['Value'] for tag in remote_description.get('Tags', ())}
-
-            raw_tags = self.processed_config[self.tags_key]
-
-            if isinstance(raw_tags, dict):
-                tags = {tag['Key']: tag['Value'] for tag in raw_tags}
-            elif isinstance(raw_tags, str):
-                tags = json.loads(raw_tags)
+            _, remote_tags = self._get_index_id_and_tags_from_boto3_resource(self.boto3_resource())
+            if force or remote_tags.get(manager_tag_key) == self.manager:
+                self.update()
             else:
-                raise TypeError
-
-            if not force:
-                if remote_tags.get(manager_tag_key) != tags[manager_tag_key]:
-                    raise ValueError("Resource managed by another manager.")
-
-            self.update()
+                raise ValueError("Resource managed by another manager.")
         else:
             logger.info('{} "{}" does not exist. Creating.'.format(self.top_key, self.name))
             resp, self.index_id = self.create(wait=wait)
@@ -112,6 +102,37 @@ class IAMResource(AwaitableAWSResource, AWSResource, abc.ABC):
     @abc.abstractmethod
     def update(self):
         pass
+
+    @staticmethod
+    @abc.abstractmethod
+    def _get_index_id_and_tags_from_boto3_resource(boto3_resource) -> Tuple[str, Optional[Dict]]:
+        pass
+
+    @classmethod
+    def tagged_resource(cls, boto_res, session, region_name) -> Optional['AWSResource']:
+        index_id, tags = cls._get_index_id_and_tags_from_boto3_resource(boto_res)
+        if tags:
+            return cls(session=session,
+                       region_name=region_name,
+                       index_id=index_id,
+                       ztid=pipe(tags.get('ztid'), lambda x: uuid.UUID(x) if x else None),
+                       config={'Tags': tags},
+                       assume_exists=True)
+
+    @classmethod
+    def list_with_tags(cls, session, region_name=None, sync=False) -> Generator['AWSResource', None, None]:
+        service_resource = session.resource(cls.client_name, region_name=region_name)
+
+        if cls.top_key == 'Policy':
+            # scroll(self.service_client.list_policies, Scope='Local')
+            collection = service_resource.policies.all()
+        elif cls.top_key == 'Role':
+            collection = service_resource.roles.all()
+        else:
+            raise ValueError
+
+        yield from filter(None, map_async(partial(cls.tagged_resource, session=session, region_name=region_name),
+                                          collection, sync=sync))
 
 
 class Policy(IAMResource):
@@ -138,29 +159,16 @@ class Policy(IAMResource):
         if maybe_dsecription:
             return maybe_dsecription['Arn']
 
-    @classmethod
-    def list_with_tags(cls, session, region_name=None, sync=False) -> Generator['Policy', None, None]:
-        service_resource = session.resource(cls.client_name, region_name=region_name)
-
-        def tagged_resource(boto_res):
-            description = boto_res.description
-            index_id = boto_res.arn
-            if not description:
-                return
-            try:
-                tags = json.loads(description)['Tags']
-            except (json.JSONDecodeError, KeyError):
-                return
-            else:
-                return cls(session=session,
-                           region_name=region_name,
-                           index_id=index_id,
-                           ztid=pipe(tags.get('ztid'), lambda x: uuid.UUID(x) if x else None),
-                           config={'Tags': tags},
-                           assume_exists=True)
-
-        # scroll(self.service_client.list_policies, Scope='Local')
-        yield from filter(None, map_async(tagged_resource, service_resource.policies.all(), sync=sync))
+    @staticmethod
+    def _get_index_id_and_tags_from_boto3_resource(boto3_resource) -> Tuple[str, Optional[Dict]]:
+        description = boto3_resource.description
+        index_id = boto3_resource.arn
+        if not description:
+            return index_id, None
+        try:
+            return index_id, json.loads(description)['Tags']
+        except (json.JSONDecodeError, KeyError):
+            return index_id, None
 
     def _get_description_from_name(self):
         policies = scroll(self.service_client.list_policies)
@@ -170,7 +178,7 @@ class Policy(IAMResource):
             return None
 
     def _process_config(self, config: Mapping) -> Mapping:
-        tags_dict = merge(standard_tags(self.ztid), config.get('Description', {}))
+        tags_dict = merge(standard_tags(self), config.get('Description', {}))
         processed_config = pipe(config,
                                 assoc(key='Description', value=tags_dict),
                                 super()._process_config)
@@ -220,25 +228,13 @@ class Role(IAMResource):
     def _get_index_id_from_name(self):
         return self.name
 
-    @classmethod
-    def list_with_tags(cls, session, region_name=None, sync=False) -> Generator['Role', None, None]:
-        service_resource = session.resource(cls.client_name, region_name=region_name)
-
-        def tagged_resource(boto_res):
-            tags = boto_res.tags
-            index_id = boto_res.name
-            return cls(session=session,
-                       region_name=region_name,
-                       index_id=index_id,
-                       ztid=pipe(tags.get('ztid'), lambda x: uuid.UUID(x) if x else None),
-                       config={'Tags': tags},
-                       assume_exists=True)
-
-        # scroll(self.service_client.list_policies, Scope='Local')
-        yield from filter(None, map_async(tagged_resource, service_resource.roles.all(), sync=sync))
+    @staticmethod
+    def _get_index_id_and_tags_from_boto3_resource(boto3_resource) -> Tuple[str, Optional[Dict]]:
+        tags = {tag['Key']: tag['Value'] for tag in boto3_resource.tags}
+        return boto3_resource.name, tags
 
     def _process_config(self, config: Mapping) -> Mapping:
-        tags_dict = merge(standard_tags(self.ztid), config.get('Tags', {}))
+        tags_dict = merge(standard_tags(self), config.get('Tags', {}))
         tags_list = [{'Key': k, 'Value': v} for k, v in tags_dict.items()]
         processed_config = pipe(config,
                                 assoc(key='Tags', value=tags_list),
