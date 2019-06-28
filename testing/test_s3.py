@@ -82,4 +82,14 @@ def test_existing_s3_bucket(s3_bucket, caplog):
 
     assert copy._get_index_id_from_ztid() == copy.name
 
+    for bucket in zaws_s3.Bucket.list_with_tags(s3_bucket.session):
+        assert bucket.ztid != s3_bucket.ztid or bucket.name == s3_bucket.name
+
     assert copy.exists
+
+
+def test_list_with_tags(s3_bucket, caplog):
+    s3_bucket.put()
+
+    for bucket in zaws_s3.Bucket.list_with_tags(s3_bucket.session):
+        assert bucket.ztid != s3_bucket.ztid or bucket.name == s3_bucket.name

@@ -4,6 +4,7 @@ import botocore.exceptions
 from typing import Optional, Dict, Mapping, Generator
 from toolz import merge, pipe
 from toolz.curried import assoc
+import uuid
 from .basic import (scroll, AWSResource, AwaitableAWSResource, standard_tags)
 
 logger = logging.getLogger(__name__)
@@ -47,8 +48,14 @@ class Bucket(AwaitableAWSResource, AWSResource):
         return self.name
 
     def _get_index_id_from_ztid(self) -> Optional[str]:
-        resource_client = self.session.resource(self.client_name, region_name=self.region_name)
-        for bucket in resource_client.buckets.all():
+        for bucket in __class__.list_with_tags(self.session, self.region_name):
+            if bucket.ztid == self.ztid:
+                return bucket.name
+
+    @classmethod
+    def list_with_tags(cls, session, region_name=None) -> Generator['Bucket', None, None]:
+        service_resource = session.resource(cls.client_name, region_name=region_name)
+        for bucket in service_resource.buckets.all():
             try:
                 tag_set = bucket.Tagging().tag_set
             except botocore.exceptions.ClientError as ex:
@@ -57,11 +64,13 @@ class Bucket(AwaitableAWSResource, AWSResource):
                 else:
                     raise
             else:
-                for ztid in (ts['Value'] for ts in tag_set if ts['Key'] == 'ztid'):
-                    if ztid == str(self.ztid):
-                        return bucket.name
-                else:
-                    continue
+                tags = {ts['Key']: ts['Value'] for ts in tag_set}
+                yield Bucket(name=bucket.name,
+                             ztid=pipe(tags.get('ztid'), lambda x: uuid.UUID(x) if x else None),
+                             session=session,
+                             region_name=region_name,
+                             config={'Tags': tags},
+                             assume_exists=True)
 
     def _process_config(self, config: Mapping) -> Mapping:
         tags_dict = merge(standard_tags(self.ztid), config.get('Tags', {}))
