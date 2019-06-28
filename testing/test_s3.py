@@ -93,3 +93,12 @@ def test_list_with_tags(s3_bucket, caplog):
 
     for bucket in zaws_s3.Bucket.list_with_tags(s3_bucket.session):
         assert bucket.ztid != s3_bucket.ztid or bucket.name == s3_bucket.name
+
+
+def fallback_cleanup_utility():
+    """Use this in case testing litters the test account with test buckets"""
+    service_resource = boto3.Session(profile_name='test').resource('s3')
+    for bucket in service_resource.buckets.all():
+        if bucket.name.startswith('test-bucket-'):
+            print(bucket.name)
+            bucket.delete()
