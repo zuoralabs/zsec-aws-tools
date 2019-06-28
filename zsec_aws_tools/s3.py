@@ -119,7 +119,7 @@ class Bucket(AwaitableAWSResource, AWSResource):
     def put(self, wait: bool = True, force: bool = False):
         if not self.exists:
             logger.info('{} "{}" does not exist. Creating.'.format(self.top_key, self.name))
-            self.create(wait=wait)   # no need to set index_id since `self.index_id_key == self.name_key`
+            self.create(wait=wait)  # no need to set index_id since `self.index_id_key == self.name_key`
             self.exists = True
 
         if 'Policy' in self.processed_config:
