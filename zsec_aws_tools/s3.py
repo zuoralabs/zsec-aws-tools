@@ -1,7 +1,7 @@
 import json
 import logging
 import botocore.exceptions
-from typing import Optional, Dict, Mapping
+from typing import Optional, Dict, Mapping, Generator
 from toolz import merge, pipe
 from toolz.curried import assoc
 from .basic import (scroll, AWSResource, AwaitableAWSResource, standard_tags)
@@ -58,7 +58,7 @@ class Bucket(AwaitableAWSResource, AWSResource):
                     raise
             else:
                 for ztid in (ts['Value'] for ts in tag_set if ts['Key'] == 'ztid'):
-                    if ztid == self.ztid:
+                    if ztid == str(self.ztid):
                         return bucket.name
                 else:
                     continue
