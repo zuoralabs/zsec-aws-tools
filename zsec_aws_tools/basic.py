@@ -146,10 +146,13 @@ class AWSResource(abc.ABC):
     not_found_exception_name: str
     non_creation_parameters = ()
 
+    index_id: Optional[str]
+
     def __init__(self, session, region_name=None, name=None, index_id=None,
                  ztid: Optional[uuid.UUID] = None,
                  old_names=(),
-                 config: Optional[Dict] = None):
+                 config: Optional[Dict] = None,
+                 assume_exists: bool = False):
         """
         WARNING: if given, name is assumed to identify the condition set, although this is not always true
 
@@ -171,10 +174,10 @@ class AWSResource(abc.ABC):
 
         if self.index_id_key == self.name_key:
             self.name = self.index_id = name or index_id
-            self.exists = self._detect_existence_using_index_id()
+            self.exists = assume_exists or self._detect_existence_using_index_id()
         elif index_id:
             self.index_id = index_id
-            self.exists = self._detect_existence_using_index_id()
+            self.exists = assume_exists or self._detect_existence_using_index_id()
             if self.exists:
                 self.name = self.describe()[self.name_key]
             if name:
@@ -190,8 +193,10 @@ class AWSResource(abc.ABC):
                 self.index_id = maybe_index_value
                 self.exists = True
             else:
-                self.index_id = ''
+                self.index_id = None
                 self.exists = False
+                if assume_exists:
+                    raise ValueError("{} assumed to exist, but it does not exist.".format(self))
 
         self.config = MappingProxyType(config or {})
 
