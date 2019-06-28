@@ -2,7 +2,7 @@ import logging
 import io
 import uuid
 from typing import Dict, Union, Mapping, Generator
-from toolz import pipe, partial, thread_last, merge
+from toolz import pipe, merge
 from toolz.curried import assoc
 from .basic import (scroll, AWSResource, AwaitableAWSResource, manager_tag_key,
                     standard_tags)
@@ -178,7 +178,7 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
                 logger.info('creating function')
                 self.create(wait=wait)
                 logger.info('finished creating function')
-            except self.service_client.exceptions.ResourceConflictException as error:
+            except self.service_client.exceptions.ResourceConflictException:
                 # this should never happen
                 logger.error('possible race condition encountered')
                 raise
@@ -210,7 +210,7 @@ def zip_compress(source: Path, output: Union[Path, io.IOBase]) -> None:
 
     with zipfile.ZipFile(output, 'w') as zf:
         if source.is_dir():
-            for dd, _, ffs in os.walk(source):
+            for dd, _, ffs in os.walk(str(source)):
                 for ff in ffs:
                     pp = Path(dd, ff)
                     zf.write(pp, arcname=pp.relative_to(Path('src')))

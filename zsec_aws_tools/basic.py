@@ -1,10 +1,9 @@
 import boto3
 import abc
 import json
-from typing import Tuple, Dict, Optional, Iterable, Mapping, MappingView, Callable, Generator
+from typing import Tuple, Dict, Optional, Mapping, Callable, Generator
 from .cleaning import clean_up_stack
 import logging
-from toolz import first, assoc
 import time
 import uuid
 from types import MappingProxyType
@@ -83,6 +82,7 @@ def _get_key(key_mapping, fn):
         return key_mapping.get((fn.__self__.__class__.__name__, fn.__name__), None)
 
 
+# noinspection PyPep8Naming
 def scroll(fn, resp_key=None, resp_marker_key=None, req_marker_key=None, **kwargs):
     """
     :return: Iterable over items

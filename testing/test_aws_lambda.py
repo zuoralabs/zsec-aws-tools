@@ -7,8 +7,6 @@ import textwrap
 import json
 import logging
 import uuid
-import time
-from botocore.exceptions import ClientError
 
 logging.getLogger('botocore').setLevel(logging.WARNING)
 logging.getLogger('boto3').setLevel(logging.WARNING)
