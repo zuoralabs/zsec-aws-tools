@@ -2,10 +2,11 @@ import json
 import logging
 import botocore.exceptions
 from typing import Optional, Dict, Mapping, Generator
-from toolz import merge, pipe
+from toolz import merge, pipe, partial
 from toolz.curried import assoc
 import uuid
 from .basic import (scroll, AWSResource, AwaitableAWSResource, standard_tags)
+from .async_tools import maybe_asyncify_gather_and_run
 
 logger = logging.getLogger(__name__)
 
@@ -53,24 +54,50 @@ class Bucket(AwaitableAWSResource, AWSResource):
                 return bucket.name
 
     @classmethod
-    def list_with_tags(cls, session, region_name=None) -> Generator['Bucket', None, None]:
+    def list_with_tags(cls, session, region_name=None, sync=False) -> Generator['Bucket', None, None]:
+        """
+
+        :param session:
+        :param region_name:
+        :param sync: whether to use async
+        :return: generator over buckets with tags
+
+        Informal benchmark using IPython, account has 9 buckets::
+
+            timeit list(print(bucket.ztid) for bucket in zs3.Bucket.list_with_tags(boto3.Session()))
+
+            -> 1.75 s ± 898 ms per loop (mean ± std. dev. of 7 runs, 1 loop each)
+
+            timeit list(print(bucket.ztid) for bucket in zs3.Bucket.list_with_tags(boto3.Session(), sync=True))
+
+            -> 9.31 s ± 2.73 s per loop (mean ± std. dev. of 7 runs, 1 loop each)
+
+        """
         service_resource = session.resource(cls.client_name, region_name=region_name)
-        for bucket in service_resource.buckets.all():
+
+        def bucket_with_tags(bucket) -> Optional['Bucket']:
             try:
                 tag_set = bucket.Tagging().tag_set
             except botocore.exceptions.ClientError as ex:
-                if ex.response['Error']['Code'] == 'NoSuchTagSet':
-                    continue
+                if ex.response['Error']['Code'] in (
+                        'NoSuchTagSet',
+                        'NoSuchBucket',  # We don't manage all buckets, so expect buckets to disappear any time.
+                ):
+                    return
                 else:
                     raise
             else:
                 tags = {ts['Key']: ts['Value'] for ts in tag_set}
-                yield Bucket(name=bucket.name,
-                             ztid=pipe(tags.get('ztid'), lambda x: uuid.UUID(x) if x else None),
-                             session=session,
-                             region_name=region_name,
-                             config={'Tags': tags},
-                             assume_exists=True)
+                return Bucket(name=bucket.name,
+                              ztid=pipe(tags.get('ztid'), lambda x: uuid.UUID(x) if x else None),
+                              session=session,
+                              region_name=region_name,
+                              config={'Tags': tags},
+                              assume_exists=True)
+
+        thunks = (partial(bucket_with_tags, bucket) for bucket in service_resource.buckets.all())
+        results = maybe_asyncify_gather_and_run(thunks, sync=sync)
+        yield from filter(None, results)
 
     def _process_config(self, config: Mapping) -> Mapping:
         tags_dict = merge(standard_tags(self.ztid), config.get('Tags', {}))
