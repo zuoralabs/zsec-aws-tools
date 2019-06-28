@@ -151,7 +151,7 @@ class AWSResource(abc.ABC):
     def __init__(self, session, region_name=None, name=None, index_id=None,
                  ztid: Optional[uuid.UUID] = None,
                  old_names=(),
-                 config: Optional[Dict] = None,
+                 config: Optional[Mapping] = None,
                  assume_exists: bool = False):
         """
         WARNING: if given, name is assumed to identify the condition set, although this is not always true
