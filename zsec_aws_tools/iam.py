@@ -1,13 +1,15 @@
 import json
 import logging
 import boto3
-from typing import Dict, Iterable, Tuple, Optional, Mapping
+import uuid
+from typing import Dict, Iterable, Tuple, Optional, Mapping, Generator
 from types import MappingProxyType
 from .basic import AWSResource, scroll, AwaitableAWSResource, standard_tags, manager_tag_key, get_account_id
 from toolz import first, thread_last, pipe, merge
 from toolz.curried import assoc
 import abc
 from .meta import apply_with_relevant_kwargs
+from .async_tools import map_async
 
 logger = logging.getLogger(__name__)
 MAX_POLICY_VERSION_COUNT = 5  # set by Amazon
@@ -26,9 +28,9 @@ def assume_role_response_to_session_kwargs(assume_role_resp):
     Also useful for creating AWS credentials file.
 
     """
-    return dict(aws_access_key_id = assume_role_resp['Credentials']['AccessKeyId'],
-                aws_secret_access_key = assume_role_resp['Credentials']['SecretAccessKey'],
-                aws_session_token = assume_role_resp['Credentials']['SessionToken'],)
+    return dict(aws_access_key_id=assume_role_resp['Credentials']['AccessKeyId'],
+                aws_secret_access_key=assume_role_resp['Credentials']['SecretAccessKey'],
+                aws_session_token=assume_role_resp['Credentials']['SessionToken'], )
 
 
 def assume_role_session(session: boto3.Session,
@@ -54,9 +56,9 @@ def assume_role_session(session: boto3.Session,
         **kwargs)
 
     return boto3.Session(
-        aws_access_key_id = resp['Credentials']['AccessKeyId'],
-        aws_secret_access_key = resp['Credentials']['SecretAccessKey'],
-        aws_session_token = resp['Credentials']['SessionToken'],
+        aws_access_key_id=resp['Credentials']['AccessKeyId'],
+        aws_secret_access_key=resp['Credentials']['SecretAccessKey'],
+        aws_session_token=resp['Credentials']['SessionToken'],
     )
 
 
@@ -136,15 +138,29 @@ class Policy(IAMResource):
         if maybe_dsecription:
             return maybe_dsecription['Arn']
 
-    def _get_index_id_from_ztid(self):
-        service_resource = self.session.resource(self.client_name, region_name=self.region_name)
-        for br_policy in service_resource.policies.all():
-            #scroll(self.service_client.list_policies, Scope='Local')
-            description = br_policy.description
-            if description:
-                tags = json.loads(description).get(self.tags_key, {})
-                if tags.get('ztid') == self.ztid:
-                    return br_policy.arn
+    @classmethod
+    def list_with_tags(cls, session, region_name=None, sync=False) -> Generator['Policy', None, None]:
+        service_resource = session.resource(cls.client_name, region_name=region_name)
+
+        def tagged_resource(boto_res):
+            description = boto_res.description
+            index_id = boto_res.arn
+            if not description:
+                return
+            try:
+                tags = json.loads(description)['Tags']
+            except (json.JSONDecodeError, KeyError):
+                return
+            else:
+                return cls(session=session,
+                           region_name=region_name,
+                           index_id=index_id,
+                           ztid=pipe(tags.get('ztid'), lambda x: uuid.UUID(x) if x else None),
+                           config={'Tags': tags},
+                           assume_exists=True)
+
+        # scroll(self.service_client.list_policies, Scope='Local')
+        yield from filter(None, map_async(tagged_resource, service_resource.policies.all(), sync=sync))
 
     def _get_description_from_name(self):
         policies = scroll(self.service_client.list_policies)
@@ -175,10 +191,10 @@ class Policy(IAMResource):
 
     @property
     def arn(self) -> str:
-        return super().arn or "arn:aws:iam::{}:policy{}/{}".format(
+        return super().arn if self.index_id else "arn:aws:iam::{}:policy{}/{}".format(
             get_account_id(self.session),
             self.processed_config.get('Path', ''),
-            self.name,)
+            self.name, )
 
     def wait_until_exists(self):
         self.wait(self.existence_waiter_name, PolicyArn=self.arn)
@@ -204,11 +220,22 @@ class Role(IAMResource):
     def _get_index_id_from_name(self):
         return self.name
 
-    def _get_index_id_from_ztid(self):
-        for description in scroll(self.service_client.list_roles):
-            tags = description['Tags']
-            if tags.get('ztid') == self.ztid:
-                return description[self.index_id_key]
+    @classmethod
+    def list_with_tags(cls, session, region_name=None, sync=False) -> Generator['Role', None, None]:
+        service_resource = session.resource(cls.client_name, region_name=region_name)
+
+        def tagged_resource(boto_res):
+            tags = boto_res.tags
+            index_id = boto_res.name
+            return cls(session=session,
+                       region_name=region_name,
+                       index_id=index_id,
+                       ztid=pipe(tags.get('ztid'), lambda x: uuid.UUID(x) if x else None),
+                       config={'Tags': tags},
+                       assume_exists=True)
+
+        # scroll(self.service_client.list_policies, Scope='Local')
+        yield from filter(None, map_async(tagged_resource, service_resource.roles.all(), sync=sync))
 
     def _process_config(self, config: Mapping) -> Mapping:
         tags_dict = merge(standard_tags(self.ztid), config.get('Tags', {}))
@@ -255,7 +282,7 @@ class Role(IAMResource):
     def list_role_policies(self):
         # self.service_client.list_role_policies fails to list policies attached to the role, for unknown reasons.
         # use the resource API instead
-        #return scroll(self.service_client.list_role_policies, **{self.name_key: self.name})
+        # return scroll(self.service_client.list_role_policies, **{self.name_key: self.name})
         res = self.boto3_resource()
         return (Policy(index_id=policy.arn, session=self.session, region_name=self.region_name)
                 for policy in res.attached_policies.all())

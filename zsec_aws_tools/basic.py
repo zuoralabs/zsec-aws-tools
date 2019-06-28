@@ -1,7 +1,7 @@
 import boto3
 import abc
 import json
-from typing import Tuple, Dict, Optional, Iterable, Mapping, MappingView, Callable
+from typing import Tuple, Dict, Optional, Iterable, Mapping, MappingView, Callable, Generator
 from .cleaning import clean_up_stack
 import logging
 from toolz import first, assoc
@@ -281,7 +281,6 @@ class AWSResource(abc.ABC):
         for old_version in self.old_versions:
             old_version.delete()
 
-    @abc.abstractmethod
     def _get_index_id_from_ztid(self) -> Optional[str]:
         """Return ID using self.name
 
@@ -290,6 +289,13 @@ class AWSResource(abc.ABC):
         If it returns a string, it means this resource exists.
 
         """
+        for res in self.list_with_tags(self.session, self.region_name):  # type: AWSResource
+            if res.ztid == self.ztid:
+                return res.name
+
+    @classmethod
+    @abc.abstractmethod
+    def list_with_tags(cls, session, region_name=None, sync=False) -> Generator['AWSResource', None, None]:
         pass
 
     @abc.abstractmethod

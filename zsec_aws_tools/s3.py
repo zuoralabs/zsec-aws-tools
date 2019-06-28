@@ -48,11 +48,6 @@ class Bucket(AwaitableAWSResource, AWSResource):
         """
         return self.name
 
-    def _get_index_id_from_ztid(self) -> Optional[str]:
-        for bucket in __class__.list_with_tags(self.session, self.region_name):
-            if bucket.ztid == self.ztid:
-                return bucket.name
-
     @classmethod
     def list_with_tags(cls, session, region_name=None, sync=False) -> Generator['Bucket', None, None]:
         """Return the buckets that have tags

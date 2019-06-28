@@ -1,6 +1,7 @@
 import logging
 import io
-from typing import Dict, Union, Mapping
+import uuid
+from typing import Dict, Union, Mapping, Generator
 from toolz import pipe, partial, thread_last, merge
 from toolz.curried import assoc
 from .basic import (scroll, AWSResource, AwaitableAWSResource, manager_tag_key,
@@ -13,6 +14,7 @@ import time
 from botocore.exceptions import ClientError
 from .iam import Role
 import json
+from .async_tools import map_async
 
 logger = logging.getLogger(__name__)
 
@@ -69,12 +71,22 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
     def _get_index_id_from_name(self):
         return self.name
 
-    def _get_index_id_from_ztid(self):
-        for description in scroll(self.service_client.list_functions):
+    @classmethod
+    def list_with_tags(cls, session, region_name=None, sync=False) -> Generator['FunctionResource', None, None]:
+        service_client = session.client(cls.client_name, region_name=region_name)
+
+        def resource_with_tags(description):
             tags = description.get('Tags',
-                                   self.service_client.list_tags(Resource=description['FunctionArn'])['Tags'])
-            if tags.get('ztid') == self.ztid:
-                return description[self.index_id_key]
+                                   service_client.list_tags(Resource=description['FunctionArn'])['Tags'])
+
+            return FunctionResource(session=session,
+                                    region_name=region_name,
+                                    ztid=pipe(tags.get('ztid'), lambda x: uuid.UUID(x) if x else None),
+                                    index_id=description[cls.index_id_key],
+                                    config={'Tags': tags},
+                                    assume_exists=True)
+
+        return map_async(resource_with_tags, scroll(service_client.list_functions), sync=sync)
 
     def _just_need_to_wait(self, err) -> bool:
         """Determines if we got a real error or if we just need to wait and retry
