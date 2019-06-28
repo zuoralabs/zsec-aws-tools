@@ -16,6 +16,7 @@ Usage::
 """
 
 import asyncio
+from functools import wraps, partial
 
 
 async def asyncify(thunk):
@@ -29,8 +30,16 @@ def gather_and_run(fs):
     return asyncio.run(_inner())
 
 
-def maybe_asyncify_gather_and_run(fs, sync=False):
+def thunkify(fn):
+    @wraps(fn)
+    def thunkified(*args, **kwargs):
+        return partial(fn, *args, **kwargs)
+
+    return thunkified
+
+
+def map_async(fn, iterable, sync=False):
     if sync:
-        return (f() for f in fs)
+        return map(fn, iterable)
     else:
-        return gather_and_run(map(asyncify, fs))
+        return gather_and_run(map(asyncify, (partial(fn, elt) for elt in iterable)))

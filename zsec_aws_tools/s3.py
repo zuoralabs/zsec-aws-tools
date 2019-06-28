@@ -6,7 +6,7 @@ from toolz import merge, pipe, partial
 from toolz.curried import assoc
 import uuid
 from .basic import (scroll, AWSResource, AwaitableAWSResource, standard_tags)
-from .async_tools import maybe_asyncify_gather_and_run
+from .async_tools import map_async
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +95,7 @@ class Bucket(AwaitableAWSResource, AWSResource):
                               config={'Tags': tags},
                               assume_exists=True)
 
-        thunks = (partial(bucket_with_tags, bucket) for bucket in service_resource.buckets.all())
-        results = maybe_asyncify_gather_and_run(thunks, sync=sync)
+        results = map_async(bucket_with_tags, service_resource.buckets.all(), sync=sync)
         yield from filter(None, results)
 
     def _process_config(self, config: Mapping) -> Mapping:
