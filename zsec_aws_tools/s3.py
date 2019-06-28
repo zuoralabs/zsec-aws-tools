@@ -55,7 +55,7 @@ class Bucket(AwaitableAWSResource, AWSResource):
 
     @classmethod
     def list_with_tags(cls, session, region_name=None, sync=False) -> Generator['Bucket', None, None]:
-        """
+        """Return the buckets that have tags
 
         :param session:
         :param region_name:
