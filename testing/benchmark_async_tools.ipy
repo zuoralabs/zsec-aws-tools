@@ -1,0 +1,11 @@
+from zsec_aws_tools.async_tools import maybe_asyncify_gather_and_run
+import time
+from functools import partial
+
+%timeit sum(maybe_asyncify_gather_and_run((partial(lambda x: time.sleep(.1) or x + 1, y) for y in range(10)), sync=False))
+# expected result:
+# 106 ms ± 684 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
+
+%timeit sum(maybe_asyncify_gather_and_run((partial(lambda x: time.sleep(.1) or x + 1, y) for y in range(10)), sync=True))
+# expected result:
+# 1.02 s ± 3.88 ms per loop (mean ± std. dev. of 7 runs, 1 loop each)
