@@ -19,9 +19,19 @@ import asyncio
 from functools import wraps, partial
 
 
-async def asyncify(thunk):
+async def asyncify(fn, *args):
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, thunk)
+    return await loop.run_in_executor(None, fn, *args)
+
+
+def asyncify2(fn):
+    @wraps(fn)
+    def _fn(*args, **kwargs):
+        @asyncify
+        def thunk():
+            return fn(*args, **kwargs)
+        return thunk
+    return _fn
 
 
 def gather_and_run(fs):
@@ -42,4 +52,4 @@ def map_async(fn, iterable, sync=False):
     if sync:
         return map(fn, iterable)
     else:
-        return gather_and_run(map(asyncify, (partial(fn, elt) for elt in iterable)))
+        return gather_and_run(asyncify(fn, elt) for elt in iterable)
