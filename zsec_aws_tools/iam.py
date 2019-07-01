@@ -6,7 +6,7 @@ from functools import partialmethod, partial
 from typing import Dict, Iterable, Tuple, Optional, Mapping, Generator
 from types import MappingProxyType
 from .basic import (AWSResource, scroll, AwaitableAWSResource, standard_tags, manager_tag_key, get_account_id,
-                    zsec_tools_manager_tag_value)
+                    zsec_tools_manager_tag_value, HasServiceResource)
 from toolz import first, thread_last, pipe, merge
 from toolz.curried import assoc
 import abc
@@ -64,7 +64,7 @@ def assume_role_session(session: boto3.Session,
     )
 
 
-class IAMResource(AwaitableAWSResource, AWSResource, abc.ABC):
+class IAMResource(HasServiceResource, AwaitableAWSResource, AWSResource, abc.ABC):
     service_name: str = 'iam'
     arn_key: str = 'Arn'
     not_found_exception_name = 'NoSuchEntityException'
@@ -95,39 +95,9 @@ class IAMResource(AwaitableAWSResource, AWSResource, abc.ABC):
 
         assert self.index_id
 
-    def boto3_resource(self):
-        cls = getattr(self.session.resource(self.service_name), self.top_key)
-        return cls(self.index_id)
-
     @abc.abstractmethod
     def update(self):
         pass
-
-    @staticmethod
-    @abc.abstractmethod
-    def _get_index_id_and_tags_from_boto3_resource(boto3_resource) -> Tuple[str, Optional[Dict]]:
-        pass
-
-    @classmethod
-    def _tagged_resource(cls, boto_res, session, region_name) -> Optional['AWSResource']:
-        index_id, tags = cls._get_index_id_and_tags_from_boto3_resource(boto_res)
-        if tags:
-            return cls(session=session,
-                       region_name=region_name,
-                       index_id=index_id,
-                       ztid=pipe(tags.get('ztid'), lambda x: uuid.UUID(x) if x else None),
-                       config={'Tags': tags},
-                       assume_exists=True)
-
-    @classmethod
-    def list_with_tags(cls, session, region_name=None, sync=False) -> Generator['AWSResource', None, None]:
-        service_resource = session.resource(cls.service_name, region_name=region_name)
-
-        # scroll(getattr(self.service_client, list_{}, Scope='Local')
-        collection = getattr(service_resource, cls.sdk_name_plural_form()).all()
-
-        yield from filter(None, map_async(partial(cls._tagged_resource, session=session, region_name=region_name),
-                                          collection, sync=sync))
 
 
 class Policy(IAMResource):

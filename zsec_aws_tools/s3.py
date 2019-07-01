@@ -1,17 +1,17 @@
 import json
 import logging
 import botocore.exceptions
-from typing import Optional, Dict, Mapping, Generator
+from typing import Optional, Dict, Mapping, Generator, Tuple
 from toolz import merge, pipe, partial
 from toolz.curried import assoc
 import uuid
-from .basic import (scroll, AWSResource, AwaitableAWSResource, standard_tags)
+from .basic import (scroll, AWSResource, AwaitableAWSResource, standard_tags, HasServiceResource)
 from .async_tools import map_async
 
 logger = logging.getLogger(__name__)
 
 
-class Bucket(AwaitableAWSResource, AWSResource):
+class Bucket(HasServiceResource, AwaitableAWSResource, AWSResource):
     top_key = 'Bucket'
     id_key = 'Bucket'
     name_key = 'Bucket'
@@ -48,6 +48,22 @@ class Bucket(AwaitableAWSResource, AWSResource):
         """
         return self.name
 
+    @staticmethod
+    def _get_index_id_and_tags_from_boto3_resource(boto3_resource) -> Tuple[str, Optional[Dict]]:
+        try:
+            tag_set = boto3_resource.Tagging().tag_set
+        except botocore.exceptions.ClientError as ex:
+            if ex.response['Error']['Code'] in (
+                    'NoSuchTagSet',
+                    'NoSuchBucket',  # We don't manage all buckets, so expect buckets to disappear any time.
+            ):
+                return boto3_resource.name, None
+            else:
+                raise
+        else:
+            tags = {ts['Key']: ts['Value'] for ts in tag_set}
+            return boto3_resource.name, tags
+
     @classmethod
     def list_with_tags(cls, session, region_name=None, sync=False) -> Generator['Bucket', None, None]:
         """Return the buckets that have tags
@@ -68,30 +84,7 @@ class Bucket(AwaitableAWSResource, AWSResource):
             -> 9.31 s ± 2.73 s per loop (mean ± std. dev. of 7 runs, 1 loop each)
 
         """
-        service_resource = session.resource(cls.service_name, region_name=region_name)
-
-        def bucket_with_tags(bucket) -> Optional['Bucket']:
-            try:
-                tag_set = bucket.Tagging().tag_set
-            except botocore.exceptions.ClientError as ex:
-                if ex.response['Error']['Code'] in (
-                        'NoSuchTagSet',
-                        'NoSuchBucket',  # We don't manage all buckets, so expect buckets to disappear any time.
-                ):
-                    return
-                else:
-                    raise
-            else:
-                tags = {ts['Key']: ts['Value'] for ts in tag_set}
-                return Bucket(name=bucket.name,
-                              ztid=pipe(tags.get('ztid'), lambda x: uuid.UUID(x) if x else None),
-                              session=session,
-                              region_name=region_name,
-                              config={'Tags': tags},
-                              assume_exists=True)
-
-        results = map_async(bucket_with_tags, service_resource.buckets.all(), sync=sync)
-        yield from filter(None, results)
+        yield from super().list_with_tags(session, region_name, sync)
 
     def _process_config(self, config: Mapping) -> Mapping:
         tags_dict = merge(standard_tags(self), config.get('Tags', {}))
@@ -106,9 +99,6 @@ class Bucket(AwaitableAWSResource, AWSResource):
         Do not call describe on a bucket. It doesn't do anything.
         """
         raise NotImplementedError
-
-    def boto3_resource(self):
-        return self.session.resource('s3').Bucket(self.name)
 
     def put(self, wait: bool = True, force: bool = False):
         if not self.exists:

@@ -2,12 +2,15 @@ import boto3
 import abc
 import json
 from typing import Tuple, Dict, Optional, Mapping, Callable, Generator
+from functools import partial
 from .cleaning import clean_up_stack
 import logging
 import time
 import uuid
 from types import MappingProxyType
+from toolz import pipe
 from .meta import get_operation_model, type_name_mapping
+from .async_tools import map_async
 
 logger = logging.getLogger(__name__)
 
@@ -392,6 +395,38 @@ class AwaitableAWSResource(AWSResource, abc.ABC):
 
     def wait_until_exists(self):
         self.wait(self.existence_waiter_name)
+
+
+class HasServiceResource(AWSResource, abc.ABC):
+    def boto3_resource(self):
+        cls = getattr(self.session.resource(self.service_name), self.top_key)
+        return cls(self.index_id)
+
+    @staticmethod
+    @abc.abstractmethod
+    def _get_index_id_and_tags_from_boto3_resource(boto3_resource) -> Tuple[str, Optional[Dict]]:
+        pass
+
+    @classmethod
+    def _tagged_resource(cls, boto_res, session, region_name) -> Optional['AWSResource']:
+        index_id, tags = cls._get_index_id_and_tags_from_boto3_resource(boto_res)
+        if tags:
+            return cls(session=session,
+                       region_name=region_name,
+                       index_id=index_id,
+                       ztid=pipe(tags.get('ztid'), lambda x: uuid.UUID(x) if x else None),
+                       config={'Tags': tags},
+                       assume_exists=True)
+
+    @classmethod
+    def list_with_tags(cls, session, region_name=None, sync=False) -> Generator['AWSResource', None, None]:
+        service_resource = session.resource(cls.service_name, region_name=region_name)
+
+        # scroll(getattr(self.service_client, list_{}, Scope='Local')
+        collection = getattr(service_resource, cls.sdk_name_plural_form()).all()
+
+        yield from filter(None, map_async(partial(cls._tagged_resource, session=session, region_name=region_name),
+                                          collection, sync=sync))
 
 
 def standard_tags(res: AWSResource) -> Mapping:
