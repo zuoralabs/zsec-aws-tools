@@ -123,13 +123,8 @@ class IAMResource(AwaitableAWSResource, AWSResource, abc.ABC):
     def list_with_tags(cls, session, region_name=None, sync=False) -> Generator['AWSResource', None, None]:
         service_resource = session.resource(cls.service_name, region_name=region_name)
 
-        if cls.top_key == 'Policy':
-            # scroll(self.service_client.list_policies, Scope='Local')
-            collection = service_resource.policies.all()
-        elif cls.top_key == 'Role':
-            collection = service_resource.roles.all()
-        else:
-            raise ValueError
+        # scroll(getattr(self.service_client, list_{}, Scope='Local')
+        collection = getattr(service_resource, cls.sdk_name_plural_form()).all()
 
         yield from filter(None, map_async(partial(cls.tagged_resource, session=session, region_name=region_name),
                                           collection, sync=sync))

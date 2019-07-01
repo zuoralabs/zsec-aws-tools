@@ -137,7 +137,7 @@ def scroll(fn, resp_key=None, resp_marker_key=None, req_marker_key=None, **kwarg
 class AWSResource(abc.ABC):
     top_key: str
     sdk_name: str  # name in sdk functions, for example create_*, delete_*, etc.
-    sdk_name_plural_form: str = None
+    _sdk_name_plural_form_override: str = None
     name_key: str = 'Name'
     session: boto3.Session
     region_name: str
@@ -222,6 +222,13 @@ class AWSResource(abc.ABC):
         self._config = config
         # flush cache for processed_config when config is set.
         self._processed_config = None
+
+    @classmethod
+    def sdk_name_plural_form(cls) -> str:
+        return cls._sdk_name_plural_form_override or (
+            cls.sdk_name[:-1] + 'ies' if cls.sdk_name[-1] == 'y' and cls.sdk_name[-2] not in 'aeou'
+            else cls.sdk_name + 's'
+        )
 
     @property
     def processed_config(self) -> Mapping:
