@@ -109,7 +109,7 @@ class IAMResource(AwaitableAWSResource, AWSResource, abc.ABC):
         pass
 
     @classmethod
-    def tagged_resource(cls, boto_res, session, region_name) -> Optional['AWSResource']:
+    def _tagged_resource(cls, boto_res, session, region_name) -> Optional['AWSResource']:
         index_id, tags = cls._get_index_id_and_tags_from_boto3_resource(boto_res)
         if tags:
             return cls(session=session,
@@ -126,7 +126,7 @@ class IAMResource(AwaitableAWSResource, AWSResource, abc.ABC):
         # scroll(getattr(self.service_client, list_{}, Scope='Local')
         collection = getattr(service_resource, cls.sdk_name_plural_form()).all()
 
-        yield from filter(None, map_async(partial(cls.tagged_resource, session=session, region_name=region_name),
+        yield from filter(None, map_async(partial(cls._tagged_resource, session=session, region_name=region_name),
                                           collection, sync=sync))
 
 
