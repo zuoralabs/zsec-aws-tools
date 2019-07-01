@@ -65,7 +65,7 @@ def assume_role_session(session: boto3.Session,
 
 
 class IAMResource(AwaitableAWSResource, AWSResource, abc.ABC):
-    client_name: str = 'iam'
+    service_name: str = 'iam'
     arn_key: str = 'Arn'
     not_found_exception_name = 'NoSuchEntityException'
     tags_key: str = 'Tags'
@@ -96,7 +96,7 @@ class IAMResource(AwaitableAWSResource, AWSResource, abc.ABC):
         assert self.index_id
 
     def boto3_resource(self):
-        cls = getattr(self.session.resource(self.client_name), self.top_key)
+        cls = getattr(self.session.resource(self.service_name), self.top_key)
         return cls(self.index_id)
 
     @abc.abstractmethod
@@ -121,7 +121,7 @@ class IAMResource(AwaitableAWSResource, AWSResource, abc.ABC):
 
     @classmethod
     def list_with_tags(cls, session, region_name=None, sync=False) -> Generator['AWSResource', None, None]:
-        service_resource = session.resource(cls.client_name, region_name=region_name)
+        service_resource = session.resource(cls.service_name, region_name=region_name)
 
         if cls.top_key == 'Policy':
             # scroll(self.service_client.list_policies, Scope='Local')

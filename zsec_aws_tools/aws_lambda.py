@@ -49,7 +49,7 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
     top_key = 'Function'
     id_key = 'FunctionArn'
     name_key = 'FunctionName'
-    client_name = 'lambda'
+    service_name = 'lambda'
     sdk_name = 'function'
     index_id_key = name_key
     not_found_exception_name = 'ResourceNotFoundException'
@@ -73,7 +73,7 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
 
     @classmethod
     def list_with_tags(cls, session, region_name=None, sync=False) -> Generator['FunctionResource', None, None]:
-        service_client = session.client(cls.client_name, region_name=region_name)
+        service_client = session.client(cls.service_name, region_name=region_name)
 
         def resource_with_tags(description):
             tags = description.get('Tags',

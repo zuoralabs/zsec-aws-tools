@@ -137,10 +137,11 @@ def scroll(fn, resp_key=None, resp_marker_key=None, req_marker_key=None, **kwarg
 class AWSResource(abc.ABC):
     top_key: str
     sdk_name: str  # name in sdk functions, for example create_*, delete_*, etc.
+    sdk_name_plural_form: str = None
     name_key: str = 'Name'
     session: boto3.Session
     region_name: str
-    client_name: str
+    service_name: str
     has_arn: bool
     index_id_key: str  # the key that is given to `describe()` or `get()` to obtain description.
     not_found_exception_name: str
@@ -161,7 +162,7 @@ class AWSResource(abc.ABC):
         """
         self.session = session
         self.region_name = region_name
-        self.service_client = session.client(self.client_name, region_name=region_name)
+        self.service_client = session.client(self.service_name, region_name=region_name)
         self.ztid = ztid
         self.manager = manager
 

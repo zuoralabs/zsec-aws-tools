@@ -15,7 +15,7 @@ class Bucket(AwaitableAWSResource, AWSResource):
     top_key = 'Bucket'
     id_key = 'Bucket'
     name_key = 'Bucket'
-    client_name = 's3'
+    service_name = 's3'
     sdk_name = 'bucket'
     index_id_key = name_key
     not_found_exception_name = 'NoSuchBucket'
@@ -68,7 +68,7 @@ class Bucket(AwaitableAWSResource, AWSResource):
             -> 9.31 s ± 2.73 s per loop (mean ± std. dev. of 7 runs, 1 loop each)
 
         """
-        service_resource = session.resource(cls.client_name, region_name=region_name)
+        service_resource = session.resource(cls.service_name, region_name=region_name)
 
         def bucket_with_tags(bucket) -> Optional['Bucket']:
             try:
