@@ -55,6 +55,7 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
     not_found_exception_name = 'ResourceNotFoundException'
     role: Role
     existence_waiter_name = 'function_exists'
+    non_creation_parameters = ['Permissions']
 
     def _process_config(self, config: Mapping) -> Mapping:
         self.role = role = config['Role']
@@ -182,6 +183,19 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
                 # this should never happen
                 logger.error('possible race condition encountered')
                 raise
+
+        for permission in self.config['Permissions']:
+            try:
+                self.service_client.remove_permission(
+                    **{self.name_key: self.name,
+                       'StatementId': permission['StatementId']}
+                )
+            except self.service_client.exceptions.ResourceNotFoundException:
+                pass
+            self.service_client.add_permission(
+                **{self.name_key: self.name,
+                   **permission}
+            )
 
     def invoke(self, json_codec: bool = False, **kwargs):
         if json_codec and 'Payload' in kwargs:
