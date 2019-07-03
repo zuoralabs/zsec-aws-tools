@@ -20,7 +20,9 @@ class Bucket(HasServiceResource, AwaitableAWSResource, AWSResource):
     index_id_key = name_key
     not_found_exception_name = 'NoSuchBucket'
     existence_waiter_name = 'bucket_exists'
-    non_creation_parameters = ['Policy', 'Tags']
+    non_creation_parameters = ['Policy', 'Tags', 'ServerSideEncryptionConfiguration', 'LifecycleConfiguration',
+                               'BucketLoggingStatus', 'CORSConfiguration', 'NotificationConfiguration',
+                               ]
 
     def _detect_existence_using_index_id(self) -> bool:
         return self.boto3_resource().creation_date is not None
@@ -113,6 +115,17 @@ class Bucket(HasServiceResource, AwaitableAWSResource, AWSResource):
         if 'Tags' in self.processed_config:
             tags = self.processed_config['Tags']
             self.boto3_resource().Tagging().put(Tagging={'TagSet': tags})
+
+        for config_key, sdk_name in [('ServerSideEncryptionConfiguration', 'encryption'),
+                                     ('LifecycleConfiguration', 'lifecycle_configuration'),
+                                     ('BucketLoggingStatus', 'logging'),
+                                     ('CORSConfiguration', 'cors'),
+                                     ('NotificationConfiguration', 'notification_configuration'),
+                                     ]:
+            if config_key in self.processed_config:
+                getattr(self.service_client, 'put_bucket_' + sdk_name)(
+                    **{self.index_id_key: self.index_id,
+                       config_key: self.processed_config[config_key]})
 
     def wait_until_not_exists(self) -> None:
         return self.boto3_resource().wait_until_not_exists()

@@ -45,7 +45,18 @@ def s3_bucket():
                               name='test-bucket-' + random_str,
                               ztid=uuid.UUID('bf981b04-dae1-4b6c-a6c3-0d107eb4c847'),
                               config=dict(ACL='private',
-                                          Policy=bucket_policy))
+                                          Policy=bucket_policy,
+                                          ServerSideEncryptionConfiguration={
+                                              'Rules': [
+                                                  {
+                                                      'ApplyServerSideEncryptionByDefault': {
+                                                          'SSEAlgorithm': 'AES256',
+                                                      }
+                                                  }
+                                              ]
+                                          }
+                                          )
+                              )
 
     yield bucket_x
 
