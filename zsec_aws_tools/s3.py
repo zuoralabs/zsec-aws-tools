@@ -6,9 +6,17 @@ from toolz import merge, pipe, partial
 from toolz.curried import assoc
 import uuid
 from .basic import (scroll, AWSResource, AwaitableAWSResource, standard_tags, HasServiceResource)
+from .meta import get_operation_model
 from .async_tools import map_async
 
 logger = logging.getLogger(__name__)
+
+bucket_properties = [('ServerSideEncryptionConfiguration', 'encryption'),
+                     ('LifecycleConfiguration', 'lifecycle_configuration'),
+                     ('BucketLoggingStatus', 'logging'),
+                     ('CORSConfiguration', 'cors'),
+                     ('NotificationConfiguration', 'notification_configuration'),
+                     ]
 
 
 class Bucket(HasServiceResource, AwaitableAWSResource, AWSResource):
@@ -93,7 +101,18 @@ class Bucket(HasServiceResource, AwaitableAWSResource, AWSResource):
         tags_list = [{'Key': k, 'Value': v} for k, v in tags_dict.items()]
         processed_config = pipe(config,
                                 assoc(key='Tags', value=tags_list),
-                                super()._process_config)
+                                super()._process_config,
+                                dict)
+
+        for config_key, sdk_name in bucket_properties:
+            if config_key in processed_config:
+                operation_name = getattr(self.service_client, 'put_bucket_' + sdk_name)
+                operation_model = get_operation_model(self.service_client, operation_name)
+
+                processed_config[config_key] = self._process_config_value(
+                    operation_model.input_shape.members[config_key],
+                    processed_config[config_key])
+
         return processed_config
 
     def describe(self) -> Dict:
@@ -116,12 +135,7 @@ class Bucket(HasServiceResource, AwaitableAWSResource, AWSResource):
             tags = self.processed_config['Tags']
             self.boto3_resource().Tagging().put(Tagging={'TagSet': tags})
 
-        for config_key, sdk_name in [('ServerSideEncryptionConfiguration', 'encryption'),
-                                     ('LifecycleConfiguration', 'lifecycle_configuration'),
-                                     ('BucketLoggingStatus', 'logging'),
-                                     ('CORSConfiguration', 'cors'),
-                                     ('NotificationConfiguration', 'notification_configuration'),
-                                     ]:
+        for config_key, sdk_name in bucket_properties:
             if config_key in self.processed_config:
                 getattr(self.service_client, 'put_bucket_' + sdk_name)(
                     **{self.index_id_key: self.index_id,

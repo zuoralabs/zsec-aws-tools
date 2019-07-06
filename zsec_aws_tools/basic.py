@@ -1,7 +1,10 @@
+import botocore
+import botocore.model
 import boto3
 import abc
 import json
-from typing import Tuple, Dict, Optional, Mapping, Callable, Generator
+import collections.abc as cabc
+from typing import Tuple, Dict, Optional, Mapping, Callable, Generator, Set, Any
 from functools import partial
 from .cleaning import clean_up_stack
 import logging
@@ -340,6 +343,38 @@ class AWSResource(abc.ABC):
         """
         pass
 
+    def _process_config_value(self, shape: Optional[botocore.model.Shape], value):
+        vv = value
+
+        while isinstance(vv, cabc.Callable):
+            vv = vv(self)
+
+        if isinstance(vv, cabc.Mapping):
+            if isinstance(shape, botocore.model.MapShape):
+                return {kk: self._process_config_value(shape.value, vv2) for kk, vv2 in vv.items()}
+            elif isinstance(shape, botocore.model.StructureShape):
+                return {kk: self._process_config_value(shape.members[kk], vv2) for kk, vv2 in vv.items()}
+            else:
+                vv = {kk: self._process_config_value(None, vv2) for kk, vv2 in vv.items()}
+
+        elif isinstance(vv, (cabc.Set, cabc.Sequence)) and not isinstance(vv, (bytes, str)):
+            if isinstance(shape, botocore.model.ListShape):
+                return [self._process_config_value(shape.member, vv2) for vv2 in vv]
+            else:
+                vv = [self._process_config_value(None, vv2) for vv2 in vv]
+
+        # at this point mappings, sets, and sequences are canonicalized to dicts and lists.
+        if shape is None:
+            return vv
+        else:
+            _aws_input_type = type_name_mapping[shape.type_name]
+            if isinstance(vv, (dict, list, int)) and _aws_input_type is str:
+                return json.dumps(vv)
+            elif isinstance(vv, str) and _aws_input_type is bytes:
+                return vv.encode()
+            else:
+                return _aws_input_type(vv)
+
     def _process_config(self, config: Mapping) -> Mapping:
         processed_config = dict(config)
         processed_config[self.name_key] = self.name
@@ -348,20 +383,7 @@ class AWSResource(abc.ABC):
             if kk not in self.non_creation_parameters:
                 operation_model = get_operation_model(self.service_client, 'create_{}'.format(self.sdk_name))
                 shape = operation_model.input_shape.members[kk]
-                _aws_input_type = type_name_mapping[shape.type_name]
-                while not isinstance(vv, _aws_input_type):
-                    if isinstance(vv, Callable):
-                        vv = vv(self)
-                    elif isinstance(vv, Mapping) and type(vv) is not dict:
-                        vv = dict(vv)
-                    elif isinstance(vv, (dict, list, int)) and _aws_input_type is str:
-                        vv = json.dumps(vv)
-                    elif isinstance(vv, str) and _aws_input_type is bytes:
-                        vv = vv.encode()
-                    else:
-                        vv = _aws_input_type(vv)
-
-                processed_config[kk] = vv
+                processed_config[kk] = self._process_config_value(shape, vv)
 
         return MappingProxyType(processed_config)
 
