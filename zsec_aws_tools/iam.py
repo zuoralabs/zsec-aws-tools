@@ -3,7 +3,7 @@ import logging
 import boto3
 import uuid
 from functools import partialmethod, partial
-from typing import Dict, Iterable, Tuple, Optional, Mapping, Generator
+from typing import Dict, Iterable, Tuple, Optional, Mapping, Generator, Union
 from types import MappingProxyType
 from .basic import (AWSResource, scroll, AwaitableAWSResource, standard_tags, manager_tag_key, get_account_id,
                     zsec_tools_manager_tag_value, HasServiceResource)
@@ -248,10 +248,12 @@ class Role(IAMResource):
         return (Policy(index_id=policy.arn, session=self.session, region_name=self.region_name)
                 for policy in res.attached_policies.all())
 
-    def put_policies(self, policies: Iterable[Policy]):
+    def put_policies(self, policies: Iterable[Union[Policy, str]]):
+        policy_arns = [policy.arn if isinstance(policy, Policy) else policy  # each policy could be a Policy or arn
+                       for policy in policies]
         res = self.boto3_resource()
 
-        wanted = frozenset(policy.boto3_resource().arn for policy in policies)
+        wanted = frozenset(policy_arns)
         existing = frozenset(policy.arn for policy in res.attached_policies.all())
 
         to_detach = existing - wanted
