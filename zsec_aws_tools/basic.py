@@ -355,12 +355,14 @@ class AWSResource(abc.ABC):
             elif isinstance(shape, botocore.model.StructureShape):
                 return {kk: self._process_config_value(shape.members[kk], vv2) for kk, vv2 in vv.items()}
             else:
+                # shape is None or StringShape
                 vv = {kk: self._process_config_value(None, vv2) for kk, vv2 in vv.items()}
 
         elif isinstance(vv, (cabc.Set, cabc.Sequence)) and not isinstance(vv, (bytes, str)):
             if isinstance(shape, botocore.model.ListShape):
                 return [self._process_config_value(shape.member, vv2) for vv2 in vv]
             else:
+                # shape is None or StringShape
                 vv = [self._process_config_value(None, vv2) for vv2 in vv]
 
         # at this point mappings, sets, and sequences are canonicalized to dicts and lists.
