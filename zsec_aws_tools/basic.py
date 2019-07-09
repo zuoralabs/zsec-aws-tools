@@ -107,7 +107,7 @@ def scroll(fn, resp_key=None, resp_marker_key=None, req_marker_key=None, **kwarg
             resp_key = _possible_keys.pop()
             print('By elimination, using resp_key={} in call to {}'.format(resp_key, fn.__name__))
 
-    yield from resp[resp_key]
+    yield from resp.get(resp_key, ())  # sometimes resp_key is not included in response if there are no resources.
 
     if not resp_marker_key:
         _maybe_key = _get_key(resp_marker_key_mapping, fn)
