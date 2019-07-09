@@ -274,9 +274,14 @@ class AWSResource(abc.ABC):
                 if self.index_id_key.endswith(key) or key.endswith(self.index_id_key):
                     index_id = value
                     break
+
+        if index_id is not None:
+            self.index_id = index_id
+
         if wait:
             self.wait_until_exists()
-        self.exists = True
+            self.exists = True
+
         return resp, index_id
 
     def delete(self, not_exists_ok: bool = False, **kwargs) -> Optional[Dict]:
