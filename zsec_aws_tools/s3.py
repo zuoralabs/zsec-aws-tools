@@ -58,8 +58,8 @@ class Bucket(HasServiceResource, AwaitableAWSResource, AWSResource):
         """
         return self.name
 
-    @staticmethod
-    def _get_index_id_and_tags_from_boto3_resource(boto3_resource) -> Tuple[str, Optional[Dict]]:
+    @classmethod
+    def _get_index_id_and_tags_from_boto3_resource(cls, boto3_resource, _, _2) -> Tuple[str, Optional[Dict]]:
         try:
             tag_set = boto3_resource.Tagging().tag_set
         except botocore.exceptions.ClientError as ex:

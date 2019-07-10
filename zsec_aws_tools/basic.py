@@ -431,14 +431,15 @@ class HasServiceResource(AWSResource, abc.ABC):
         cls = getattr(self.session.resource(self.service_name), self.top_key)
         return cls(self.index_id)
 
-    @staticmethod
+    @classmethod
     @abc.abstractmethod
-    def _get_index_id_and_tags_from_boto3_resource(boto3_resource) -> Tuple[str, Optional[Dict]]:
+    def _get_index_id_and_tags_from_boto3_resource(cls, boto_res, session: boto3.Session, region_name: str)\
+            -> Tuple[str, Optional[Dict]]:
         pass
 
     @classmethod
-    def _tagged_resource(cls, boto_res, session, region_name) -> Optional['AWSResource']:
-        index_id, tags = cls._get_index_id_and_tags_from_boto3_resource(boto_res)
+    def _tagged_resource(cls, boto_res, session: boto3.Session, region_name: str) -> Optional['AWSResource']:
+        index_id, tags = cls._get_index_id_and_tags_from_boto3_resource(boto_res, session, region_name)
         if tags:
             return cls(session=session,
                        region_name=region_name,

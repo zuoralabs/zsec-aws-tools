@@ -124,8 +124,8 @@ class Policy(IAMResource):
         if maybe_dsecription:
             return maybe_dsecription['Arn']
 
-    @staticmethod
-    def _get_index_id_and_tags_from_boto3_resource(boto3_resource) -> Tuple[str, Optional[Dict]]:
+    @classmethod
+    def _get_index_id_and_tags_from_boto3_resource(cls, boto3_resource, _, _2) -> Tuple[str, Optional[Dict]]:
         description = boto3_resource.description
         index_id = boto3_resource.arn
         if not description:
@@ -193,8 +193,8 @@ class Role(IAMResource):
     def _get_index_id_from_name(self):
         return self.name
 
-    @staticmethod
-    def _get_index_id_and_tags_from_boto3_resource(boto3_resource) -> Tuple[str, Optional[Dict]]:
+    @classmethod
+    def _get_index_id_and_tags_from_boto3_resource(cls, boto3_resource, _, _2) -> Tuple[str, Optional[Dict]]:
         tags = {tag['Key']: tag['Value'] for tag in boto3_resource.tags}
         return boto3_resource.name, tags
 
