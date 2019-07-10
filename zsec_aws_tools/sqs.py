@@ -1,10 +1,10 @@
 import logging
 import io
 import uuid
-from typing import Dict, Union, Mapping, Generator
+from typing import Dict, Union, Mapping, Generator, Tuple, Optional
 from toolz import pipe, merge
 from toolz.curried import assoc
-from .basic import (scroll, AWSResource, AwaitableAWSResource, manager_tag_key,
+from .basic import (scroll, AWSResource, AwaitableAWSResource, manager_tag_key, HasServiceResource,
                     standard_tags)
 from pathlib import Path
 import time
@@ -22,7 +22,7 @@ QueueUrl looks like this: https://sqs.{region_name}.amazonaws.com/{account_id}/{
 """
 
 
-class Queue(AWSResource):
+class Queue(HasServiceResource, AWSResource):
     top_key = 'Queue'
     index_id_key = 'QueueUrl'
     name_key = 'QueueName'
@@ -39,25 +39,19 @@ class Queue(AWSResource):
         return processed_config
 
     def _get_index_id_from_name(self):
-        for queue_url in scroll(self.service_client.list_queues, QueueNamePrefix=self.name, resp_key='QueueUrls'):
-            if queue_url.split('/')[-1] == self.name:
-                return queue_url
+        sr = self.session.resource(self.service_name)
+        try:
+            return sr.get_queue_by_name(**{self.name_key: self.name}).url
+        except self.service_client.exceptions.QueueDoesNotExist:
+            return
 
     @classmethod
-    def list_with_tags(cls, session, region_name=None, sync=False) -> Generator['Queue', None, None]:
+    def _get_index_id_and_tags_from_boto3_resource(cls, session, region_name, boto3_resource) \
+            -> Tuple[str, Optional[Dict]]:
+        queue_url = boto3_resource.url
         service_client = session.client(cls.service_name, region_name=region_name)
-
-        def resource_with_tags(queue_url):
-            tags = service_client.list_queue_tags(QueueUrl=queue_url)['Tags']
-
-            return Queue(session=session,
-                         region_name=region_name,
-                         ztid=pipe(tags.get('ztid'), lambda x: uuid.UUID(x) if x else None),
-                         index_id=queue_url,
-                         config={'Tags': tags},
-                         assume_exists=True)
-
-        return map_async(resource_with_tags, scroll(service_client.list_queues), sync=sync)
+        tags = service_client.list_queue_tags(QueueUrl=queue_url)['Tags']
+        return queue_url, tags
 
     def describe(self, **kwargs) -> Dict:
         assert self.index_id
