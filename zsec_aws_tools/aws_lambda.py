@@ -1,11 +1,12 @@
 import logging
 import io
 import uuid
-from typing import Dict, Union, Mapping, Generator
+from typing import Dict, Union, Mapping, Generator, Optional
 from toolz import pipe, merge
 from toolz.curried import assoc
 from .basic import (scroll, AWSResource, AwaitableAWSResource, manager_tag_key,
                     standard_tags)
+from .meta import get_operation_model
 import zipfile
 from pathlib import Path
 import hashlib
@@ -45,7 +46,27 @@ update_function_code_input_keys = ['FunctionName',
                                    'RevisionId']
 
 
+class ConfigArgumentModel:
+    sdk_name: str
+    create_name: str
+    delete_name: str
+    update_name: Optional[str]
+    is_collection: bool
+
+    def __init__(self, sdk_name, create_name='create', delete_name='delete', update_name: Optional[str] = 'update',
+                 is_collection: bool = False):
+        self.sdk_name = sdk_name
+        self.create_name = create_name
+        self.delete_name = delete_name
+        self.update_name = update_name
+        self.is_collection = is_collection
+
+
 class FunctionResource(AwaitableAWSResource, AWSResource):
+    """
+    WARNING: Permissions do not behave as expected, since AWS API has no documented way of checking for
+    existing permissions. That means you have to explicitly remove unwanted permissions by StatementId.
+    """
     top_key = 'Function'
     id_key = 'FunctionArn'
     name_key = 'FunctionName'
@@ -55,7 +76,11 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
     not_found_exception_name = 'ResourceNotFoundException'
     role: Role
     existence_waiter_name = 'function_exists'
-    non_creation_parameters = ['Permissions']
+    non_creation_parameters = {
+        'Permissions': ConfigArgumentModel('permission', create_name='add', delete_name='remove',
+                                           update_name=None, is_collection=True),
+        'EventSourceMappings': ConfigArgumentModel('event_source_mapping', is_collection=True),
+    }
 
     def _process_config(self, config: Mapping) -> Mapping:
         self.role = role = config['Role']
@@ -65,7 +90,22 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
                                 assoc(key='Role', value=role.arn),
                                 assoc(key='Tags', value=merge(standard_tags(self), config.get('Tags', {}))),
                                 # original tags takes precedence if there is a conflict
-                                super()._process_config)
+                                super()._process_config,
+                                dict)
+
+        for config_key, model in __class__.non_creation_parameters.items():
+            if config_key in processed_config:
+                operation_name = getattr(self.service_client, model.create_name + '_' + model.sdk_name)
+                operation_model = get_operation_model(self.service_client, operation_name)
+
+                if model.is_collection:
+                    processed_value = [self._process_config_value(operation_model.input_shape, elt)
+                                       for elt in processed_config[config_key]]
+                else:
+                    processed_value = self._process_config_value(operation_model.input_shape.members[config_key],
+                                                                 processed_config[config_key])
+
+                processed_config[config_key] = processed_value
 
         return processed_config
 
@@ -184,7 +224,7 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
                 logger.error('possible race condition encountered')
                 raise
 
-        for permission in self.config.get('Permissions', ()):
+        for permission in self.processed_config.get('Permissions', ()):
             try:
                 self.service_client.remove_permission(
                     **{self.name_key: self.name,
@@ -196,6 +236,36 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
                 **{self.name_key: self.name,
                    **permission}
             )
+
+        for event_source_mapping, extant_esm in \
+                self._find_event_source_mappings(self.processed_config.get('EventSourceMappings', ())):
+            if event_source_mapping is None:
+                self.service_client.delete_event_source_mapping(UUID=extant_esm['UUID'])
+            elif extant_esm is not None:
+                self.service_client.update_event_source_mapping(
+                    **{self.name_key: self.name, 'UUID': extant_esm['UUID'], **event_source_mapping}
+                )
+            else:
+                self.service_client.create_event_source_mapping(
+                    **{self.name_key: self.name, **event_source_mapping}
+                )
+
+    def _find_event_source_mappings(self, event_source_mappings):
+        extant = list(scroll(self.service_client.list_event_source_mappings, **{self.name_key: self.name}))
+        to_keep = set()
+        for event_source_mapping in event_source_mappings:
+            for esm_2 in extant:
+                if (esm_2['EventSourceArn'] == event_source_mapping['EventSourceArn']
+                        and esm_2['State'] not in ['Deleting']):  # ['Disabling', 'Disabled', ]
+                    yield event_source_mapping, esm_2
+                    to_keep.add(esm_2['UUID'])
+                    break
+            else:
+                yield event_source_mapping, None
+
+        for esm_2 in extant:
+            if esm_2['UUID'] not in to_keep:
+                yield None, esm_2
 
     def invoke(self, json_codec: bool = False, **kwargs):
         if json_codec and 'Payload' in kwargs:
