@@ -82,7 +82,8 @@ class IAMResource(HasServiceResource, AwaitableAWSResource, AWSResource, abc.ABC
 
     def put(self, wait: bool = True, force: bool = False):
         if self.exists:
-            _, remote_tags = self._get_index_id_and_tags_from_boto3_resource(self.boto3_resource())
+            _, remote_tags = self._get_index_id_and_tags_from_boto3_resource(self.boto3_resource(),
+                                                                             self.session, self.region_name)
             if force or remote_tags.get(manager_tag_key) == self.manager:
                 self.update()
             else:
