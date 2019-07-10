@@ -184,7 +184,7 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
                 logger.error('possible race condition encountered')
                 raise
 
-        for permission in self.config['Permissions']:
+        for permission in self.config.get('Permissions', ()):
             try:
                 self.service_client.remove_permission(
                     **{self.name_key: self.name,
