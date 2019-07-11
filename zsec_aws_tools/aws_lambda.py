@@ -6,7 +6,7 @@ from toolz import pipe, merge
 from toolz.curried import assoc
 from .basic import (scroll, AWSResource, AwaitableAWSResource, manager_tag_key,
                     standard_tags)
-from .meta import get_operation_model
+from .meta import get_operation_model, apply_with_relevant_kwargs
 import zipfile
 from pathlib import Path
 import hashlib
@@ -242,9 +242,9 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
             if event_source_mapping is None:
                 self.service_client.delete_event_source_mapping(UUID=extant_esm['UUID'])
             elif extant_esm is not None:
-                self.service_client.update_event_source_mapping(
-                    **{self.name_key: self.name, 'UUID': extant_esm['UUID'], **event_source_mapping}
-                )
+                apply_with_relevant_kwargs(self.service_client, self.service_client.update_event_source_mapping,
+                                           {self.name_key: self.name, 'UUID': extant_esm['UUID'],
+                                            **event_source_mapping})
             else:
                 self.service_client.create_event_source_mapping(
                     **{self.name_key: self.name, **event_source_mapping}
