@@ -53,3 +53,22 @@ be called on the resource before being used in a call to the AWS API. This is us
 when the config depends on an attribute of the resource itself. For example, a resource
 policy may require the resource ARN, which is most convenient to calculate after the resource
 has been defined.
+
+
+Why
+====
+
+This library aims to solve deployment and operating configuration problems in AWS.
+
+There is not always a clear separation between deployment and operating config. 
+Some parts of a resource configurations should be controlled manually, some automatically
+derived during operation, and some at deployment time. 
+
+While deployment mechanisms such as Terraform/Cloudformation can manage
+deployments, they do not play well with dynamic reconfiguration and 
+configuration using other methods.
+
+Furthermore, this library aims to be robust. Infrastructure-as-code requires
+state to be matched with code, and this mapping can become out of sync and
+corrupted. This library is meant to facilitate recovery from corrupted mapping
+between state and code.
