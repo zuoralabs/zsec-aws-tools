@@ -51,7 +51,7 @@ class Queue(HasServiceResource, AWSResource):
             -> Tuple[str, Optional[Dict]]:
         queue_url = boto3_resource.url
         service_client = session.client(cls.service_name, region_name=region_name)
-        tags = service_client.list_queue_tags(QueueUrl=queue_url)['Tags']
+        tags = service_client.list_queue_tags(QueueUrl=queue_url).get('Tags')
         return queue_url, tags
 
     def describe(self, **kwargs) -> Dict:
