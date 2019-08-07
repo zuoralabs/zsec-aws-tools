@@ -322,7 +322,7 @@ class AWSResource(abc.ABC):
         """
         for res in self.list_with_tags(self.session, self.region_name):  # type: AWSResource
             if res.ztid == self.ztid:
-                return res.name
+                return res.index_id
 
     @classmethod
     @abc.abstractmethod
