@@ -8,6 +8,7 @@ from .basic import (scroll, AWSResource, AwaitableAWSResource, manager_tag_key, 
                     standard_tags)
 from pathlib import Path
 import time
+import boto3
 from botocore.exceptions import ClientError
 from .iam import Role
 import json
@@ -46,7 +47,7 @@ class Queue(HasServiceResource, AWSResource):
             return
 
     @classmethod
-    def _get_index_id_and_tags_from_boto3_resource(cls, session, region_name, boto3_resource) \
+    def _get_index_id_and_tags_from_boto3_resource(cls, boto3_resource, session: boto3.Session, region_name: str) \
             -> Tuple[str, Optional[Dict]]:
         queue_url = boto3_resource.url
         service_client = session.client(cls.service_name, region_name=region_name)
