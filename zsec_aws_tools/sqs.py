@@ -58,7 +58,9 @@ class Queue(HasServiceResource, AWSResource):
         assert self.index_id
         combined_kwargs = {self.index_id_key: self.index_id}
         combined_kwargs.update(kwargs or {'AttributeNames': ['All']})
-        return self.service_client.get_queue_attributes(**combined_kwargs)
+        return merge(self.service_client.get_queue_attributes(**combined_kwargs),
+                     {self.name_key: self.index_id.split('/')[-1]}  # add the name
+                     )
 
     @property
     def arn(self) -> str:
