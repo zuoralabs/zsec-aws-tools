@@ -189,7 +189,7 @@ class Role(IAMResource):
     sdk_name: str = 'role'
     index_id_key = name_key
     existence_waiter_name = 'role_exists'
-    non_creation_parameters = ('Policies',)
+    non_creation_parameters = ('Policies', 'InlinePolicies')
 
     def _get_index_id_from_name(self):
         return self.name
@@ -205,12 +205,24 @@ class Role(IAMResource):
         processed_config = pipe(config,
                                 assoc(key='Tags', value=tags_list),
                                 super()._process_config)
+
+        # TODO: follow similar processing method as s3 Bucket
+        if 'InlinePolicies' in config:
+            for inline_policy in config['InlinePolicies']:
+                inline_policy['PolicyDocument'] = json.dumps(inline_policy['PolicyDocument'])
+
         return processed_config
 
     def create(self, wait: bool = True, **kwargs) -> Tuple[Dict, Optional[str]]:
         result = super().create(wait=wait, **kwargs)
         if 'Policies' in self.processed_config:
             self.put_policies(self.processed_config['Policies'])
+
+        if 'InlinePolicies' in self.processed_config:
+            for inline_policy in self.processed_config['InlinePolicies']:
+                self.service_client.put_role_policy(**{self.index_id_key: self.index_id,
+                                                       **inline_policy})
+
         return result
 
     def update(self):
@@ -229,6 +241,11 @@ class Role(IAMResource):
                                    self.processed_config, ignore_when_missing_required_keys=True)
 
         self.put_policies(self.processed_config['Policies'])
+
+        if 'InlinePolicies' in self.processed_config:
+            for inline_policy in self.processed_config['InlinePolicies']:
+                self.service_client.put_role_policy(**{self.index_id_key: self.index_id,
+                                                       **inline_policy})
 
     def attach_policy(self, arn):
         self.service_client.attach_role_policy(**{self.name_key: self.name, 'PolicyArn': arn})
