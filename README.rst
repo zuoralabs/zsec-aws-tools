@@ -1,10 +1,14 @@
 .. default-role:: code
 
+.. image: https://travis-ci.org/andrew-lee-zuora/zsec-aws-tools.svg?branch=master
+    ..target: https://travis-ci.org/andrew-lee-zuora/zsec-aws-tools
+
 ==============
 zsec-aws-tools
 ==============
 
 A library for making AWS API nicer to use.
+
 
 
 Installation
