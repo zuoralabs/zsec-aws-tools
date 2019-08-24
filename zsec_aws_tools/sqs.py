@@ -71,6 +71,7 @@ class Queue(HasServiceResource, AWSResource):
             kwargs = {self.index_id_key: self.index_id,
                       'Attributes': (self.processed_config.get('Attributes', {}))}
             self.service_client.set_queue_attributes(**kwargs)
+            self.service_client.tag_queue(QueueUrl=self.index_id, Tags=self.processed_config['Tags'])
         else:
             try:
                 logger.info('creating queue')
