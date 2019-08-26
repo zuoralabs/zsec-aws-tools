@@ -337,6 +337,9 @@ class AWSResource(abc.ABC):
         Should only be called during `__init__` to set `self.index_id`.
         If it returns a string, it means this resource exists.
 
+        Will not be called if `self.index_id_key == self.name_key`.
+        Just raise NotImplementedError in that case.
+
         """
         pass
 
