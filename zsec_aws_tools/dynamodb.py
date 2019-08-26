@@ -1,18 +1,13 @@
 import logging
-from typing import Dict, Union, Mapping, Generator, Tuple, Optional
+from typing import Dict, Mapping, Tuple, Optional
+
 from toolz import pipe, merge
 from toolz.curried import assoc
 
-from zsec_aws_tools.meta import apply_with_relevant_kwargs
-from .basic import (scroll, AWSResource, AwaitableAWSResource, manager_tag_key, HasServiceResource,
-                    standard_tags)
-from pathlib import Path
-import time
 import boto3
-from botocore.exceptions import ClientError
-from .iam import Role
-import json
-from .async_tools import map_async
+
+from .meta import apply_with_relevant_kwargs
+from .basic import AWSResource, HasServiceResource, standard_tags
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +20,7 @@ class Table(HasServiceResource, AWSResource):
     sdk_name = 'table'
     #not_found_exception_name = 'TableNotFoundException'
     not_found_exception_name = 'ResourceNotFoundException'
-    # non_creation_parameters = ['Tags']
+    non_creation_parameters = ['Tags']
 
     def _process_config(self, config: Mapping) -> Mapping:
         tags = [{'Key': k, 'Value': v} for k, v in merge(standard_tags(self), config.get('Tags', {})).items()]
