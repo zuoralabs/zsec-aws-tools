@@ -155,7 +155,7 @@ class AWSResource(abc.ABC):
 
     index_id: Optional[str]
 
-    def __init__(self, session, region_name=None, name=None, index_id=None,
+    def __init__(self, session: boto3.Session, region_name=None, name=None, index_id=None,
                  ztid: Optional[uuid.UUID] = None,
                  old_names=(),
                  config: Optional[Mapping] = None,
@@ -167,7 +167,7 @@ class AWSResource(abc.ABC):
         config contains the same kwargs as the create function for this resource.
         """
         self.session = session
-        self.region_name = region_name
+        self.region_name = region_name or session.region_name
         self.service_client = session.client(self.service_name, region_name=region_name)
         self.ztid = ztid
         self.manager = manager
