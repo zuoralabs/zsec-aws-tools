@@ -94,7 +94,7 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
                                 super()._process_config,
                                 dict)
 
-        for config_key, model in __class__.non_creation_parameters.items():
+        for config_key, model in self.non_creation_parameters.items():
             if config_key in processed_config:
                 operation_name = getattr(self.service_client, model.create_name + '_' + model.sdk_name)
                 operation_model = get_operation_model(self.service_client, operation_name)
@@ -154,12 +154,14 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
 
     @property
     def arn(self) -> str:
+        return self.describe()['Configuration']['FunctionArn']
+
+    def construct_arn(self):
+        """Construct arn without needing for the resource to exist"""
         return 'arn:aws:lambda:{region_name}:{account}:function:{name}'.format(
             region_name=self.region_name or self.session.region_name,
             account=get_account_id(self.session),
             name=self.name)
-
-        # return self.describe()['Configuration']['FunctionArn']
 
     def create(self, wait: bool = True, **kwargs) -> str:
         while True:
