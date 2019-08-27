@@ -7,6 +7,8 @@ import textwrap
 import json
 import logging
 import uuid
+import pytest
+
 
 logging.getLogger('botocore').setLevel(logging.WARNING)
 logging.getLogger('boto3').setLevel(logging.WARNING)
@@ -15,14 +17,7 @@ logging.basicConfig(level=logging.WARNING)
 zaws_lambda.logger.setLevel(logging.INFO)
 
 
-def create_test_lambda_code():
-    code = textwrap.dedent("""
-    
-    def lambda_handler(event, context):
-        print(event)
-    
-        return "147306"
-    """)
+def create_test_lambda_code(code):
 
     output = io.BytesIO()
     with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
@@ -33,11 +28,13 @@ def create_test_lambda_code():
     return output.getvalue()
 
 
-def test_aws_lambda():
-    session = boto3.Session(profile_name='test', region_name='us-east-1')
+@pytest.fixture
+def session():
+    yield boto3.Session(profile_name='test', region_name='us-east-1')
 
-    code: bytes = create_test_lambda_code()
 
+@pytest.fixture
+def role_for_lambda(session):
     assume_role_policy_document = {
         "Version": "2012-10-17",
         "Statement": [
@@ -61,33 +58,53 @@ def test_aws_lambda():
                     Policies=[policy]))
     role.put(wait=True)
 
+    yield role
+
+    role.detach_all_policies()
+    role.delete()
+    role.wait_until_not_exists()
+
+
+@pytest.fixture
+def fn(session, role_for_lambda):
+    test_code = textwrap.dedent("""
+        
+        def lambda_handler(event, context):
+            print(event)
+        
+            return "147306"
+        """)
+
+    code: bytes = create_test_lambda_code(test_code)
+
+    fn = zaws_lambda.FunctionResource(
+        name='test_lambda_1',
+        ztid=uuid.UUID('6db733ed-c2f0-ac73-78ec-8ab2bdffd124'),
+        session=session,
+        config=dict(
+            Code={'ZipFile': code},
+            Runtime='python3.7',
+            Role=role_for_lambda,
+            Handler='main.lambda_handler',
+            Timeout=3,
+        ))
+
+    yield fn
+
+    fn.delete()
+    fn.wait_until_not_exists()
+
+
+def test_aws_lambda(session, role_for_lambda, fn):
     # print(list(role.boto3_resource().policies.all()))
     # print(list(role.boto3_resource().attached_policies.all()))
+    # attached_policies = list(role.list_role_policies())
 
-    try:
-        # attached_policies = list(role.list_role_policies())
-        fn = zaws_lambda.FunctionResource(
-            name='test_lambda_1',
-            ztid=uuid.UUID('6db733ed-c2f0-ac73-78ec-8ab2bdffd124'),
-            session=session,
-            config=dict(
-                Code={'ZipFile': code},
-                Runtime='python3.7',
-                Role=role,
-                Handler='main.lambda_handler',
-                Timeout=3,
-            ))
-        fn.put(force=True, wait=True)
+    fn.put(force=True, wait=True)
 
-        arn = fn.arn
-        assert arn.endswith(fn.name)
-        assert arn.startswith("arn:aws:lambda:")
+    arn = fn.arn
+    assert arn.endswith(fn.name)
+    assert arn.startswith("arn:aws:lambda:")
 
-        resp = fn.invoke(json_codec=True, Payload={'a': 'a'})
-        assert resp == "147306"
-        fn.delete()
-        fn.wait_until_not_exists()
-    finally:
-        role.detach_all_policies()
-        role.delete()
-        role.wait_until_not_exists()
+    resp = fn.invoke(json_codec=True, Payload={'a': 'a'})
+    assert resp == "147306"
