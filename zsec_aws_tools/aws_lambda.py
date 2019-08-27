@@ -4,8 +4,9 @@ import uuid
 from typing import Dict, Union, Mapping, Generator, Optional
 from toolz import pipe, merge
 from toolz.curried import assoc
+
 from .basic import (scroll, AWSResource, AwaitableAWSResource, manager_tag_key,
-                    standard_tags)
+                    standard_tags, get_account_id)
 from .meta import get_operation_model, apply_with_relevant_kwargs
 import zipfile
 from pathlib import Path
@@ -153,7 +154,12 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
 
     @property
     def arn(self) -> str:
-        return self.describe()['Configuration']['FunctionArn']
+        return 'arn:aws:lambda:{region_name}:{account}:function:{name}'.format(
+            region_name=self.region_name or self.session.region_name,
+            account=get_account_id(self.session),
+            name=self.name)
+
+        # return self.describe()['Configuration']['FunctionArn']
 
     def create(self, wait: bool = True, **kwargs) -> str:
         while True:
