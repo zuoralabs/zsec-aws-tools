@@ -30,13 +30,15 @@ def my_table():
     table_x.delete(not_exists_ok=True)
 
 
-def test_table_creation_and_deletion(my_table, caplog):
+def test_table_creation_and_idempotency_and_deletion(my_table, caplog):
     caplog.set_level(logging.CRITICAL)
 
     assert not my_table.exists
     my_table.put()
     assert my_table.exists
     #assert my_queue._detect_existence_using_index_id()
+
+    my_table.put()  # test idempotency
 
     arn = my_table.arn
     assert arn

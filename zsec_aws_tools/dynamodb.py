@@ -1,10 +1,11 @@
 import logging
 from typing import Dict, Mapping, Tuple, Optional
 
-from toolz import pipe, merge
+from toolz import pipe, merge, dissoc, keyfilter
 from toolz.curried import assoc
 
 import boto3
+import botocore.exceptions
 
 from .meta import apply_with_relevant_kwargs
 from .basic import AWSResource, HasServiceResource, standard_tags
@@ -60,8 +61,28 @@ class Table(HasServiceResource, AWSResource):
     def put(self, wait: bool = True, force: bool = False):
         kwargs = {self.index_id_key: self.index_id, **self.processed_config}
 
+        for unsupported_kwarg in ('GlobalSecondaryIndexes', 'LocalSecondaryIndexes'):
+            if unsupported_kwarg in kwargs:
+                raise NotImplementedError('{} not supported for dynamodb tables'.format(unsupported_kwarg))
+
         if self.exists:
-            apply_with_relevant_kwargs(self.service_client, self.service_client.update_table, kwargs)
+            # SDK won't let you call UpdateTable with same ProvisionedThroughput.
+            if all(self.boto3_resource().provisioned_throughput[kk] == kwargs.get('ProvisionedThroughput', {}).get(kk)
+                   for kk in ('ReadCapacityUnits', 'WriteCapacityUnits')):
+                filtered_kwargs = dissoc(kwargs, 'ProvisionedThroughput')
+            else:
+                filtered_kwargs = kwargs
+
+            # SDK won't let you call UpdateTable without actually updating anything.
+            try:
+                apply_with_relevant_kwargs(self.service_client, self.service_client.update_table, filtered_kwargs)
+            except botocore.exceptions.ClientError as err:
+                if err.response['Error']['Code'] == 'ValidationException':
+                    logger.info('Not updating because nothing to update; SDK message: {}'
+                                .format(err.response['Error']['Message']))
+                else:
+                    raise
+
             apply_with_relevant_kwargs(self.service_client, self.service_client.tag_resource,
                                        {'ResourceArn': self.arn, **kwargs})
         else:
