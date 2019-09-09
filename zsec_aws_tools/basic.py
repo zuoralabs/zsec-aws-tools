@@ -62,6 +62,8 @@ resp_key_mapping = {('WAFRegional', 'list_web_acls'): 'WebACLs',
                     'list_accounts': 'Accounts',
 
                     ('Lambda', 'list_functions'): 'Functions',
+                    ('DynamoDB', 'scan'): 'Items',
+                    ('dynamodb.Table', 'scan'): 'Items',
                     }
 
 req_marker_key_mapping = {
@@ -72,10 +74,16 @@ req_marker_key_mapping = {
     'list_accounts': 'NextToken',
     'describe_load_balancers': 'Marker',
     'list_functions': 'Marker',
+    ('DynamoDB', 'scan'): 'LastEvaluatedKey',
+    ('dynamodb.Table', 'scan'): 'LastEvaluatedKey',
 }
 
 resp_marker_key_mapping = req_marker_key_mapping.copy()
-resp_marker_key_mapping['list_functions'] = 'NextMarker'
+resp_marker_key_mapping.update({
+    'list_functions': 'NextMarker',
+    ('DynamoDB', 'scan'): 'ExclusiveStartKey',
+    ('dynamodb.Table', 'scan'): 'ExclusiveStartKey',
+})
 
 possible_markers = frozenset(resp_marker_key_mapping.values())
 
