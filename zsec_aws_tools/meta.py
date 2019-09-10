@@ -30,7 +30,7 @@ def apply_with_relevant_kwargs(svc, fn, kwargs, ignore_when_missing_required_key
     filtered_kwargs = {k: v for k, v in kwargs.items() if k in desired_keys}
     required_keys = operation_model.input_shape.required_members
 
-    if ignore_when_missing_required_keys and not frozenset(kwargs.keys()).issubset(required_keys):
+    if ignore_when_missing_required_keys and not frozenset(kwargs.keys()).issuperset(required_keys):
         return
     else:
         return fn(**filtered_kwargs)
