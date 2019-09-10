@@ -181,7 +181,7 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
         if self.exists:
             kwargs = self.processed_config
             remote_description = self.describe()
-            remote_tags = remote_description['Tags']
+            remote_tags = remote_description.get('Tags', {})
             remote_configuration = remote_description['Configuration']
             arn = remote_configuration['FunctionArn']
 
