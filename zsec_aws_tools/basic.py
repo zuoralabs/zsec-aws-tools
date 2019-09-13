@@ -448,7 +448,7 @@ class AwaitableAWSResource(AWSResource, abc.ABC):
 
 class HasServiceResource(AWSResource, abc.ABC):
     def boto3_resource(self):
-        cls = getattr(self.session.resource(self.service_name), self.top_key)
+        cls = getattr(self.session.resource(self.service_name, region_name=self.region_name), self.top_key)
         return cls(self.index_id)
 
     @classmethod
