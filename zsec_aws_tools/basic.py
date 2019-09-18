@@ -240,7 +240,7 @@ class AWSResource(abc.ABC):
         self._processed_config = None
 
     @classmethod
-    def sdk_name_plural_form(cls) -> str:
+    def _sdk_name_plural_form(cls) -> str:
         return cls._sdk_name_plural_form_override or (
             cls.sdk_name[:-1] + 'ies' if cls.sdk_name[-1] == 'y' and cls.sdk_name[-2] not in 'aeou'
             else cls.sdk_name + 's'
@@ -462,7 +462,7 @@ class HasServiceResource(AWSResource, abc.ABC):
         service_resource = session.resource(cls.service_name, region_name=region_name)
 
         # scroll(getattr(self.service_client, list_{}, Scope='Local')
-        collection = getattr(service_resource, cls.sdk_name_plural_form()).all()
+        collection = getattr(service_resource, cls._sdk_name_plural_form()).all()
 
         yield from filter(None, map_async(partial(cls._tagged_resource, session=session, region_name=region_name),
                                           collection, sync=sync))
