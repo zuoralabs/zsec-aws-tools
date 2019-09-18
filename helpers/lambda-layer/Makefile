@@ -1,6 +1,6 @@
 TARGET = python/lib/python3.7/site-packages
 
-zat = zsec-aws-tools @ git+https://github.com/zuoralabs/zsec-aws-tools.git@v0.1.3
+zat = zsec-aws-tools @ git+https://github.com/zuoralabs/zsec-aws-tools.git@master
 
 all: My-Python37-ZAT.zip
 
