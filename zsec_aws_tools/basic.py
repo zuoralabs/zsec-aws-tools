@@ -174,7 +174,6 @@ class AWSResource(abc.ABC):
 
     def __init__(self, session: boto3.Session, region_name=None, name=None, index_id=None,
                  ztid: Optional[uuid.UUID] = None,
-                 old_names=(),
                  config: Optional[Mapping] = None,
                  assume_exists: bool = False,
                  manager: str = zsec_tools_manager_tag_value):
@@ -188,12 +187,6 @@ class AWSResource(abc.ABC):
         self.service_client = session.client(self.service_name, region_name=region_name)
         self.ztid = ztid
         self.manager = manager
-
-        self.old_versions = [
-            self.__class__(session=session, region_name=region_name, name=old_name)
-            for old_name in old_names]
-
-        clean_up_stack.append(self.clean_old_versions)
 
         if not (name or index_id):
             raise ValueError("Invalid input. Must supply `name` or `index_id`.")
@@ -324,10 +317,6 @@ class AWSResource(abc.ABC):
         while not self._detect_existence_using_index_id():
             logger.info("Waiting until {} exists ...".format(self))
             time.sleep(1)
-
-    def clean_old_versions(self):
-        for old_version in self.old_versions:
-            old_version.delete()
 
     def _get_index_id_from_ztid(self) -> Optional[str]:
         """Return ID using self.name
