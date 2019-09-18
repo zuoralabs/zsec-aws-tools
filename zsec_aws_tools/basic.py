@@ -233,7 +233,7 @@ class AWSResource(abc.ABC):
     @manager.setter
     def manager(self, value: str):
         self._manager = value
-        # flush cache for processed_config when config is set.
+        # flush cache for processed_config so it gets new manager value
         self._processed_config = None
 
     @property
