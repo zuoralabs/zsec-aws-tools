@@ -158,14 +158,13 @@ def scroll(fn, resp_key=None, resp_marker_key=None, req_marker_key=None, **kwarg
 
 
 class AWSResource(abc.ABC):
-    top_key: str
+    _description_top_key: str
     sdk_name: str  # name in sdk functions, for example create_*, delete_*, etc.
     _sdk_name_plural_form_override: str = None
     name_key: str = 'Name'
     session: boto3.Session
     region_name: str
     service_name: str
-    has_arn: bool
     index_id_key: str  # the key that is given to `describe()` or `get()` to obtain description.
     not_found_exception_name: str
     non_creation_parameters = ()
@@ -276,8 +275,7 @@ class AWSResource(abc.ABC):
             combined_kwargs.pop(key, None)
         client_method = getattr(self.service_client, "create_{}".format(self.sdk_name))
         resp = client_method(**combined_kwargs)
-        # may or may not need to get self.top_key
-        description = resp.get(self.top_key, resp)
+        description = resp.get(self._description_top_key, resp)
         index_id = description.get(self.index_id_key)
         if index_id is None:
             for key, value in description.items():
@@ -437,7 +435,7 @@ class AwaitableAWSResource(AWSResource, abc.ABC):
 
 class HasServiceResource(AWSResource, abc.ABC):
     def boto3_resource(self):
-        cls = getattr(self.session.resource(self.service_name, region_name=self.region_name), self.top_key)
+        cls = getattr(self.session.resource(self.service_name, region_name=self.region_name), self._description_top_key)
         return cls(self.index_id)
 
     @classmethod

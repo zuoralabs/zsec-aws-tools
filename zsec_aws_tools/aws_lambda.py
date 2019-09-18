@@ -68,7 +68,7 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
     WARNING: Permissions do not behave as expected, since AWS API has no documented way of checking for
     existing permissions. That means you have to explicitly remove unwanted permissions by StatementId.
     """
-    top_key = 'Function'
+    _description_top_key = 'Function'
     id_key = 'FunctionArn'
     name_key = 'FunctionName'
     service_name = 'lambda'

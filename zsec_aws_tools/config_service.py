@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 class ConfigRule(AWSResource):
 
-    top_key = 'ConfigRule'
+    _description_top_key = 'ConfigRule'
     index_id_key = 'ConfigRuleName'
     name_key = 'ConfigRuleName'
     service_name = 'config'

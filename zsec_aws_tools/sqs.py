@@ -24,7 +24,7 @@ QueueUrl looks like this: https://sqs.{region_name}.amazonaws.com/{account_id}/{
 
 
 class Queue(HasServiceResource, AWSResource):
-    top_key = 'Queue'
+    _description_top_key = 'Queue'
     index_id_key = 'QueueUrl'
     name_key = 'QueueName'
     service_name = 'sqs'

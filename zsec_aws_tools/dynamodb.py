@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class Table(HasServiceResource, AWSResource):
-    top_key = 'Table'
+    _description_top_key = 'Table'
     index_id_key = 'TableName'
     name_key = 'TableName'
     service_name = 'dynamodb'

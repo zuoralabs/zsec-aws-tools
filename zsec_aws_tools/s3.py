@@ -20,7 +20,7 @@ bucket_properties = [('ServerSideEncryptionConfiguration', 'encryption'),
 
 
 class Bucket(HasServiceResource, AwaitableAWSResource, AWSResource):
-    top_key = 'Bucket'
+    _description_top_key = 'Bucket'
     id_key = 'Bucket'
     name_key = 'Bucket'
     service_name = 's3'
@@ -123,7 +123,7 @@ class Bucket(HasServiceResource, AwaitableAWSResource, AWSResource):
 
     def put(self, wait: bool = True, force: bool = False):
         if not self.exists:
-            logger.info('{} "{}" does not exist. Creating.'.format(self.top_key, self.name))
+            logger.info('{} "{}" does not exist. Creating.'.format(self._description_top_key, self.name))
             self.create(wait=wait)  # no need to set index_id since `self.index_id_key == self.name_key`
             self.exists = True
 

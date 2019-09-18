@@ -74,7 +74,7 @@ class IAMResource(HasServiceResource, AwaitableAWSResource, AWSResource, abc.ABC
         combined_kwargs = {self.index_id_key: self.index_id}
         combined_kwargs.update(kwargs)
         client_method = getattr(self.service_client, "get_{}".format(self.sdk_name))
-        return client_method(**combined_kwargs)[self.top_key]
+        return client_method(**combined_kwargs)[self._description_top_key]
 
     @property
     def arn(self) -> str:
@@ -89,7 +89,7 @@ class IAMResource(HasServiceResource, AwaitableAWSResource, AWSResource, abc.ABC
             else:
                 raise ValueError("Resource managed by another manager.")
         else:
-            logger.info('{} "{}" does not exist. Creating.'.format(self.top_key, self.name))
+            logger.info('{} "{}" does not exist. Creating.'.format(self._description_top_key, self.name))
             resp, self.index_id = self.create(wait=wait)
             assert self.index_id  # should always pass for this resource type
             self.exists = True
@@ -112,7 +112,7 @@ class Policy(IAMResource):
     __ https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/iam.html#userpolicy
 
     """
-    top_key: str = 'Policy'
+    _description_top_key: str = 'Policy'
     id_key: str = 'PolicyId'
     name_key: str = 'PolicyName'
     sdk_name: str = 'policy'
@@ -183,7 +183,7 @@ class Policy(IAMResource):
 
 
 class Role(IAMResource):
-    top_key: str = 'Role'
+    _description_top_key: str = 'Role'
     id_key: str = 'RoleId'
     name_key: str = 'RoleName'
     sdk_name: str = 'role'
