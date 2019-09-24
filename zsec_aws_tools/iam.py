@@ -202,14 +202,22 @@ class Role(IAMResource):
     def _process_config(self, config: Mapping) -> Mapping:
         tags_dict = merge(standard_tags(self), config.get('Tags', {}))
         tags_list = [{'Key': k, 'Value': v} for k, v in tags_dict.items()]
-        processed_config = pipe(config,
-                                assoc(key='Tags', value=tags_list),
-                                super()._process_config)
+        processed_config = pipe(
+            config,
+            assoc(key='Tags', value=tags_list),
+            super()._process_config,
 
-        # TODO: follow similar processing method as s3 Bucket
-        if 'InlinePolicies' in config:
-            for inline_policy in config['InlinePolicies']:
-                inline_policy['PolicyDocument'] = json.dumps(inline_policy['PolicyDocument'])
+            # TODO: follow similar processing method as s3 Bucket
+            assoc(
+                key='InlinePolicies',
+                value=[
+                    (assoc(inline_policy, 'PolicyDocument', json.dumps(inline_policy['PolicyDocument']))
+                     if isinstance(inline_policy['PolicyDocument'], dict)
+                     else inline_policy)
+                    for inline_policy in config.get('InlinePolicies', ())]
+            )
+        )
+
 
         return processed_config
 
