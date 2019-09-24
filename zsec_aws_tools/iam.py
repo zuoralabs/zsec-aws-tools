@@ -121,9 +121,9 @@ class Policy(IAMResource):
     tags_key = 'Description'
 
     def _get_index_id_from_name(self):
-        maybe_dsecription = self._get_description_from_name()
-        if maybe_dsecription:
-            return maybe_dsecription['Arn']
+        maybe_description = self._get_description_from_name()
+        if maybe_description:
+            return maybe_description['Arn']
 
     @classmethod
     def _get_index_id_and_tags_from_boto3_resource(cls, boto3_resource, _, _2) -> Tuple[str, Optional[Dict]]:
