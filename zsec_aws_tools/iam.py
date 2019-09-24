@@ -82,8 +82,8 @@ class IAMResource(HasServiceResource, AwaitableAWSResource, AWSResource, abc.ABC
 
     def put(self, wait: bool = True, force: bool = False):
         if self.exists:
-            _, remote_tags = self._get_index_id_and_tags_from_boto3_resource(self.boto3_resource(),
-                                                                             self.session, self.region_name)
+            _, remote_tags = self._get_index_id_and_tags_from_boto3_resource(
+                self.boto3_resource(), self.session, self.region_name)
             if force or remote_tags.get(manager_tag_key) == self.manager:
                 self.update()
             else:
@@ -196,7 +196,7 @@ class Role(IAMResource):
 
     @classmethod
     def _get_index_id_and_tags_from_boto3_resource(cls, boto3_resource, _, _2) -> Tuple[str, Optional[Dict]]:
-        tags = {tag['Key']: tag['Value'] for tag in boto3_resource.tags}
+        tags = {tag['Key']: tag['Value'] for tag in (boto3_resource.tags or ())}
         return boto3_resource.name, tags
 
     def _process_config(self, config: Mapping) -> Mapping:
