@@ -2,3 +2,5 @@
 zsec_aws_tools.egg-info/
 
 .cache/
+/build/
+/dist/
