@@ -83,16 +83,6 @@ class Bucket(HasServiceResource, AwaitableAWSResource, AWSResource):
         :param sync: whether to use async
         :return: generator over buckets with tags
 
-        Informal benchmark using IPython, account has 9 buckets::
-
-            timeit list(print(bucket.ztid) for bucket in zs3.Bucket.list_with_tags(boto3.Session()))
-
-            -> 1.75 s ± 898 ms per loop (mean ± std. dev. of 7 runs, 1 loop each)
-
-            timeit list(print(bucket.ztid) for bucket in zs3.Bucket.list_with_tags(boto3.Session(), sync=True))
-
-            -> 9.31 s ± 2.73 s per loop (mean ± std. dev. of 7 runs, 1 loop each)
-
         """
         yield from super().list_with_tags(session, region_name, sync)
 
