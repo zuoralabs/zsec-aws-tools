@@ -5,12 +5,14 @@ import uuid
 from functools import partialmethod, partial
 from typing import Dict, Iterable, Tuple, Optional, Mapping, Generator, Union
 from types import MappingProxyType
+
+from zsec_aws_tools.basic import CustomListShape
 from .basic import (AWSResource, scroll, AwaitableAWSResource, standard_tags, manager_tag_key, get_account_id,
                     zsec_tools_manager_tag_value, HasServiceResource)
-from toolz import first, thread_last, pipe, merge
+from toolz import first, thread_last, pipe, merge, identity
 from toolz.curried import assoc
 import abc
-from .meta import apply_with_relevant_kwargs
+from .meta import apply_with_relevant_kwargs, get_parameter_shapes, get_operation_model
 from .async_tools import map_async
 
 logger = logging.getLogger(__name__)
@@ -187,8 +189,18 @@ class Role(IAMResource):
     id_key: str = 'RoleId'
     name_key: str = 'RoleName'
     sdk_name: str = 'role'
-    index_id_key = name_key
-    existence_waiter_name = 'role_exists'
+    index_id_key: str = name_key
+    existence_waiter_name: str = 'role_exists'
+    parameter_converters = {
+        'Policies': lambda policies: [policy.arn if isinstance(policy, Policy) else policy for policy in policies]
+    }
+    custom_parameter_shapes = {
+        'Policies': CustomListShape(
+            get_operation_model(boto3.client(IAMResource.service_name), 'attach_role_policy').input_shape.members[
+                'PolicyArn']),
+        'InlinePolicies': CustomListShape(
+            get_operation_model(boto3.client(IAMResource.service_name), 'put_role_policy').input_shape),
+    }
     non_creation_parameters = ('Policies', 'InlinePolicies')
 
     def _get_index_id_from_name(self):
@@ -206,18 +218,8 @@ class Role(IAMResource):
             config,
             assoc(key='Tags', value=tags_list),
             super()._process_config,
-
-            # TODO: follow similar processing method as s3 Bucket
-            assoc(
-                key='InlinePolicies',
-                value=[
-                    (assoc(inline_policy, 'PolicyDocument', json.dumps(inline_policy['PolicyDocument']))
-                     if isinstance(inline_policy['PolicyDocument'], dict)
-                     else inline_policy)
-                    for inline_policy in config.get('InlinePolicies', ())]
-            )
+            dict,
         )
-
 
         return processed_config
 
@@ -277,9 +279,7 @@ class Role(IAMResource):
         return (Policy(index_id=policy.arn, session=self.session, region_name=self.region_name)
                 for policy in res.attached_policies.all())
 
-    def put_policies(self, policies: Iterable[Union[Policy, str]]):
-        policy_arns = [policy.arn if isinstance(policy, Policy) else policy  # each policy could be a Policy or arn
-                       for policy in policies]
+    def put_policies(self, policy_arns: Iterable[Union[Policy, str]]):
         res = self.boto3_resource()
 
         wanted = frozenset(policy_arns)

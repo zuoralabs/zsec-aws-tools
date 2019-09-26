@@ -4,15 +4,16 @@ import boto3
 import abc
 import json
 import collections.abc as cabc
-from typing import Tuple, Dict, Optional, Mapping, Callable, Generator, Set, Any
+from typing import Tuple, Dict, Optional, Mapping, Callable, Generator, Set, Any, Union
 from functools import partial
 from .cleaning import clean_up_stack
 import logging
 import time
 import uuid
 from types import MappingProxyType
-from toolz import pipe
-from .meta import get_operation_model, type_name_mapping
+from toolz import pipe, identity
+import attr
+from .meta import get_operation_model, type_name_mapping, get_parameter_shapes
 from .async_tools import map_async
 
 logger = logging.getLogger(__name__)
@@ -157,6 +158,19 @@ def scroll(fn, resp_key=None, resp_marker_key=None, req_marker_key=None, **kwarg
         NextMarker = resp.get(resp_marker_key)
 
 
+@attr.s(auto_attribs=True)
+class CustomShape:
+    pass
+
+
+@attr.s(auto_attribs=True)
+class CustomListShape(CustomShape):
+    member: Union[botocore.model.Shape, CustomShape]
+
+
+Shape = Union[CustomShape, botocore.model.Shape]
+
+
 class AWSResource(abc.ABC):
     _description_top_key: str
     sdk_name: str  # name in sdk functions, for example create_*, delete_*, etc.
@@ -167,7 +181,10 @@ class AWSResource(abc.ABC):
     service_name: str
     index_id_key: str  # the key that is given to `describe()` or `get()` to obtain description.
     not_found_exception_name: str
+    parameter_converters: Mapping[str, Callable] = MappingProxyType({})
+    custom_parameter_shapes: Mapping[str, Shape] = MappingProxyType({})
     non_creation_parameters = ()
+    non_creation_parameter_handlers = ()
 
     index_id: Optional[str]
 
@@ -355,7 +372,7 @@ class AWSResource(abc.ABC):
         """
         pass
 
-    def _process_config_value(self, shape: Optional[botocore.model.Shape], value):
+    def _process_config_value(self, shape: Optional[Shape], value):
         vv = value
 
         while isinstance(vv, cabc.Callable):
@@ -371,7 +388,7 @@ class AWSResource(abc.ABC):
                 vv = {kk: self._process_config_value(None, vv2) for kk, vv2 in vv.items()}
 
         elif isinstance(vv, (cabc.Set, cabc.Sequence)) and not isinstance(vv, (bytes, str)):
-            if isinstance(shape, botocore.model.ListShape):
+            if isinstance(shape, (botocore.model.ListShape, CustomListShape)):
                 return [self._process_config_value(shape.member, vv2) for vv2 in vv]
             else:
                 # shape is None or StringShape
@@ -398,6 +415,15 @@ class AWSResource(abc.ABC):
                 operation_model = get_operation_model(self.service_client, 'create_{}'.format(self.sdk_name))
                 shape = operation_model.input_shape.members[kk]
                 processed_config[kk] = self._process_config_value(shape, vv)
+
+        for key, shape in get_parameter_shapes(self.service_client, *self.non_creation_parameter_handlers):
+            if key in processed_config:
+                processed_config[key] = self._process_config_value(shape, processed_config[key])
+
+        for key, shape in self.custom_parameter_shapes.items():
+            if key in processed_config:
+                converter = self.parameter_converters.get(key, identity)
+                processed_config[key] = self._process_config_value(shape, converter(processed_config[key]))
 
         return MappingProxyType(processed_config)
 
@@ -440,7 +466,7 @@ class HasServiceResource(AWSResource, abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def _get_index_id_and_tags_from_boto3_resource(cls, boto_res, session: boto3.Session, region_name: str)\
+    def _get_index_id_and_tags_from_boto3_resource(cls, boto_res, session: boto3.Session, region_name: str) \
             -> Tuple[str, Optional[Dict]]:
         pass
 

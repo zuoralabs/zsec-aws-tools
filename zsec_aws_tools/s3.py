@@ -31,6 +31,11 @@ class Bucket(HasServiceResource, AwaitableAWSResource, AWSResource):
     non_creation_parameters = ['Policy', 'Tags', 'ServerSideEncryptionConfiguration', 'LifecycleConfiguration',
                                'BucketLoggingStatus', 'CORSConfiguration', 'NotificationConfiguration',
                                ]
+    
+    non_creation_parameter_handlers = [
+        'put_bucket_' + sdk_name
+        for _, sdk_name in bucket_properties
+    ]
 
     def _detect_existence_using_index_id(self) -> bool:
         return self.boto3_resource().creation_date is not None
@@ -74,35 +79,14 @@ class Bucket(HasServiceResource, AwaitableAWSResource, AWSResource):
             tags = {ts['Key']: ts['Value'] for ts in tag_set}
             return boto3_resource.name, tags
 
-    @classmethod
-    def list_with_tags(cls, session, region_name=None, sync=False) -> Generator['Bucket', None, None]:
-        """Return the buckets that have tags
-
-        :param session:
-        :param region_name:
-        :param sync: whether to use async
-        :return: generator over buckets with tags
-
-        """
-        yield from super().list_with_tags(session, region_name, sync)
-
     def _process_config(self, config: Mapping) -> Mapping:
         tags_dict = merge(standard_tags(self), config.get('Tags', {}))
         tags_list = [{'Key': k, 'Value': v} for k, v in tags_dict.items()]
-        processed_config = pipe(config,
-                                assoc(key='Tags', value=tags_list),
-                                super()._process_config,
-                                dict)
-
-        for config_key, sdk_name in bucket_properties:
-            if config_key in processed_config:
-                operation_name = getattr(self.service_client, 'put_bucket_' + sdk_name)
-                operation_model = get_operation_model(self.service_client, operation_name)
-
-                processed_config[config_key] = self._process_config_value(
-                    operation_model.input_shape.members[config_key],
-                    processed_config[config_key])
-
+        processed_config = pipe(
+            config,
+            assoc(key='Tags', value=tags_list),
+            super()._process_config,
+        )
         return processed_config
 
     def describe(self) -> Dict:

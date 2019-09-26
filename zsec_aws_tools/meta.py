@@ -1,3 +1,7 @@
+from typing import Tuple, Generator
+
+import botocore.model
+
 type_name_mapping = {'string': str,
                      'long': int,
                      'blob': bytes,
@@ -34,3 +38,10 @@ def apply_with_relevant_kwargs(svc, fn, kwargs, ignore_when_missing_required_key
         return
     else:
         return fn(**filtered_kwargs)
+
+
+def get_parameter_shapes(service_client, *operation_names: str) -> Generator[Tuple[str, botocore.model.Shape], None, None]:
+    for operation_name in operation_names:
+        operation_model = get_operation_model(service_client, operation_name)
+        for key, shape in operation_model.input_shape.members.items():
+            yield key, shape
