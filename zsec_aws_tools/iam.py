@@ -10,7 +10,7 @@ from .basic import (AWSResource, scroll, AwaitableAWSResource, standard_tags, ma
 from toolz import first, thread_last, pipe, merge
 from toolz.curried import assoc
 import abc
-from .meta import apply_with_relevant_kwargs
+from .meta import apply_with_relevant_kwargs, get_parameter_shapes, get_operation_model
 from .async_tools import map_async
 
 logger = logging.getLogger(__name__)
@@ -189,6 +189,10 @@ class Role(IAMResource):
     sdk_name: str = 'role'
     index_id_key = name_key
     existence_waiter_name = 'role_exists'
+    custom_aggregate_parameters = {
+        'Policies': 'attach_role_policy',
+        'InlinePolicies': 'put_role_policy'
+    }
     non_creation_parameters = ('Policies', 'InlinePolicies')
 
     def _get_index_id_from_name(self):
@@ -206,18 +210,8 @@ class Role(IAMResource):
             config,
             assoc(key='Tags', value=tags_list),
             super()._process_config,
-
-            # TODO: follow similar processing method as s3 Bucket
-            assoc(
-                key='InlinePolicies',
-                value=[
-                    (assoc(inline_policy, 'PolicyDocument', json.dumps(inline_policy['PolicyDocument']))
-                     if isinstance(inline_policy['PolicyDocument'], dict)
-                     else inline_policy)
-                    for inline_policy in config.get('InlinePolicies', ())]
-            )
+            dict,
         )
-
 
         return processed_config
 

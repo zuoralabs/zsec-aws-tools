@@ -12,7 +12,7 @@ import time
 import uuid
 from types import MappingProxyType
 from toolz import pipe
-from .meta import get_operation_model, type_name_mapping
+from .meta import get_operation_model, type_name_mapping, get_parameter_shapes
 from .async_tools import map_async
 
 logger = logging.getLogger(__name__)
@@ -167,7 +167,9 @@ class AWSResource(abc.ABC):
     service_name: str
     index_id_key: str  # the key that is given to `describe()` or `get()` to obtain description.
     not_found_exception_name: str
+    custom_aggregate_parameters: Mapping = MappingProxyType({})
     non_creation_parameters = ()
+    non_creation_parameter_handlers = ()
 
     index_id: Optional[str]
 
@@ -388,7 +390,7 @@ class AWSResource(abc.ABC):
                 return vv.encode()
             else:
                 return _aws_input_type(vv)
-
+            
     def _process_config(self, config: Mapping) -> Mapping:
         processed_config = dict(config)
         processed_config[self.name_key] = self.name
@@ -399,6 +401,10 @@ class AWSResource(abc.ABC):
                 shape = operation_model.input_shape.members[kk]
                 processed_config[kk] = self._process_config_value(shape, vv)
 
+        for key, shape in get_parameter_shapes(self.service_client, *self.non_creation_parameter_handlers):
+            if key in processed_config:
+                processed_config[key] = self._process_config_value(shape, processed_config[key])
+                
         return MappingProxyType(processed_config)
 
     @abc.abstractmethod
