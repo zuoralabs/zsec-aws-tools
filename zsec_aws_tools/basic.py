@@ -13,7 +13,7 @@ import uuid
 from types import MappingProxyType
 from toolz import pipe, identity
 import attr
-from .meta import get_operation_model, type_name_mapping, get_parameter_shapes
+from .meta import get_operation_model, type_name_mapping, get_parameter_shapes, apply_with_relevant_kwargs
 from .async_tools import map_async
 
 logger = logging.getLogger(__name__)
@@ -288,10 +288,9 @@ class AWSResource(abc.ABC):
         combined_kwargs = {self.name_key: self.name}
         combined_kwargs.update(self.processed_config)
         combined_kwargs.update(kwargs)
-        for key in self.non_creation_parameters:
-            combined_kwargs.pop(key, None)
         client_method = getattr(self.service_client, "create_{}".format(self.sdk_name))
-        resp = client_method(**combined_kwargs)
+        
+        resp = apply_with_relevant_kwargs(self.service_client, client_method, combined_kwargs)
         description = resp.get(self._description_top_key, resp)
         index_id = description.get(self.index_id_key)
         if index_id is None:
@@ -410,10 +409,10 @@ class AWSResource(abc.ABC):
         processed_config = dict(config)
         processed_config[self.name_key] = self.name
 
+        operation_model = get_operation_model(self.service_client, 'create_{}'.format(self.sdk_name))
         for kk, vv in processed_config.items():
-            if kk not in self.non_creation_parameters:
-                operation_model = get_operation_model(self.service_client, 'create_{}'.format(self.sdk_name))
-                shape = operation_model.input_shape.members[kk]
+            shape = operation_model.input_shape.members.get(kk)
+            if shape is not None:
                 processed_config[kk] = self._process_config_value(shape, vv)
 
         for key, shape in get_parameter_shapes(self.service_client, *self.non_creation_parameter_handlers):
