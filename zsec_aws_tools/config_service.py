@@ -9,14 +9,13 @@ from toolz.curried import assoc
 import boto3
 
 from .meta import apply_with_relevant_kwargs, get_operation_model
-from .basic import AWSResource, standard_tags, scroll
+from .basic import AWSResource, standard_tags, scroll, encode_to_verbose_aws_tags, decode_from_verbose_aws_tags
 from .async_tools import map_async
 
 logger = logging.getLogger(__name__)
 
 
 class ConfigRule(AWSResource):
-
     _description_top_key = 'ConfigRule'
     index_id_key = 'ConfigRuleName'
     name_key = 'ConfigRuleName'
@@ -26,7 +25,7 @@ class ConfigRule(AWSResource):
     non_creation_parameters = ['Tags']
 
     def _process_config(self, config: Mapping) -> Mapping:
-        tags = [{'Key': k, 'Value': v} for k, v in merge(standard_tags(self), config.get('Tags', {})).items()]
+        tags: list = encode_to_verbose_aws_tags(merge(standard_tags(self), config.get('Tags', {})))
 
         processed_config: Dict = dict(config)
         processed_config['ConfigRule'][self.name_key] = self.name
@@ -48,8 +47,8 @@ class ConfigRule(AWSResource):
     def _tagged_resource(cls, description, session: boto3.Session, region_name: str, service_client) \
             -> Optional['AWSResource']:
         arn = description['ConfigRuleArn']
-        tags = {item['Key']: item['Value'] for item in
-                scroll(service_client.list_tags_for_resource, ResourceArn=arn, resp_key='Tags')}
+        tags = decode_from_verbose_aws_tags(
+            scroll(service_client.list_tags_for_resource, ResourceArn=arn, resp_key='Tags'))
         index_id = description[cls.index_id_key]
 
         if tags:

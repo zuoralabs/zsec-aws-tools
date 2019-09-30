@@ -4,7 +4,7 @@ import boto3
 import abc
 import json
 import collections.abc as cabc
-from typing import Tuple, Dict, Optional, Mapping, Callable, Generator, Set, Any, Union
+from typing import Tuple, Dict, List, Optional, Mapping, Callable, Generator, Set, Any, Union, Iterable
 from functools import partial
 from .cleaning import clean_up_stack
 import logging
@@ -169,6 +169,26 @@ class CustomListShape(CustomShape):
 
 
 Shape = Union[CustomShape, botocore.model.Shape]
+
+
+def encode_to_verbose_aws_tags(tag_dict: Dict[str, str]) -> List[Dict[str, str]]:
+    """Encode simple styled tags to verbose style tags
+
+    Some AWS services encode tags in the "simple style"::
+
+        {tag_key: tag_value}
+        
+    Others encode tags in the "verbose style"::
+
+        [{"Key": tag_key, "Value": tag_value}]
+
+    """
+    return [{'Key': k, 'Value': v} for k, v in tag_dict.items()]
+
+
+def decode_from_verbose_aws_tags(tag_list: Iterable[Dict[str, str]]) -> Dict[str, str]:
+    """Decode verbose style tags to simple styled tags"""
+    return {item['Key']: item['Value'] for item in tag_list}
 
 
 class AWSResource(abc.ABC):
