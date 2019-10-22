@@ -98,10 +98,11 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
             if config_key in processed_config:
                 operation_name = getattr(self.service_client, model.create_name + '_' + model.sdk_name)
                 operation_model = get_operation_model(self.service_client, operation_name)
+                value = self._process_config_value(None, processed_config[config_key])
 
                 if model.is_collection:
                     processed_value = [self._process_config_value(operation_model.input_shape, elt)
-                                       for elt in processed_config[config_key]]
+                                       for elt in value]
                 else:
                     processed_value = self._process_config_value(operation_model.input_shape.members[config_key],
                                                                  processed_config[config_key])
