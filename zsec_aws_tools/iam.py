@@ -239,19 +239,19 @@ class Role(IAMResource):
         update_kwargs = dict(self.processed_config)
         update_kwargs['PolicyDocument'] = update_kwargs['AssumeRolePolicyDocument']
         apply_with_relevant_kwargs(self.service_client, self.service_client.update_role,
-                                   self.processed_config, ignore_when_missing_required_keys=True)
+                                   update_kwargs, ignore_when_missing_required_keys=True)
 
         apply_with_relevant_kwargs(self.service_client, self.service_client.update_assume_role_policy,
-                                   self.processed_config, ignore_when_missing_required_keys=True)
+                                   update_kwargs, ignore_when_missing_required_keys=True)
 
         apply_with_relevant_kwargs(self.service_client, self.service_client.put_role_policy,
-                                   self.processed_config, ignore_when_missing_required_keys=True)
+                                   update_kwargs, ignore_when_missing_required_keys=True)
 
         apply_with_relevant_kwargs(self.service_client, self.service_client.tag_role,
-                                   self.processed_config, ignore_when_missing_required_keys=True)
+                                   update_kwargs, ignore_when_missing_required_keys=True)
 
         apply_with_relevant_kwargs(self.service_client, self.service_client.put_role_permissions_boundary,
-                                   self.processed_config, ignore_when_missing_required_keys=True)
+                                   update_kwargs, ignore_when_missing_required_keys=True)
 
         self.put_policies(self.processed_config['Policies'])
 
