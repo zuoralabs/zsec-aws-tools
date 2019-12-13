@@ -40,6 +40,7 @@ def assume_role_response_to_session_kwargs(assume_role_resp):
 def assume_role_session(session: boto3.Session,
                         RoleArn: str,
                         RoleSessionName: str = 'automation',
+                        region_name: str = None,
                         **kwargs) -> boto3.Session:
     """Get session using assume-role.
 
@@ -63,6 +64,7 @@ def assume_role_session(session: boto3.Session,
         aws_access_key_id=resp['Credentials']['AccessKeyId'],
         aws_secret_access_key=resp['Credentials']['SecretAccessKey'],
         aws_session_token=resp['Credentials']['SessionToken'],
+        region_name=region_name,
     )
 
 
