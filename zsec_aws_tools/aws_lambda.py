@@ -2,7 +2,7 @@ import logging
 import io
 import uuid
 from typing import Dict, Union, Mapping, Generator, Optional
-from toolz import pipe, merge
+from toolz import pipe, merge, identity
 from toolz.curried import assoc
 
 from .basic import (scroll, AWSResource, AwaitableAWSResource, manager_tag_key,
@@ -84,11 +84,11 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
     }
 
     def _process_config(self, config: Mapping) -> Mapping:
-        self.role = role = config['Role']
-        assert isinstance(self.role, Role)
+        self.role = role = config.get('Role')
+        assert role is None or isinstance(self.role, Role)
 
         processed_config = pipe(config,
-                                assoc(key='Role', value=role.arn),
+                                assoc(key='Role', value=role.arn) if role else identity,
                                 assoc(key='Tags', value=merge(standard_tags(self), config.get('Tags', {}))),
                                 # original tags takes precedence if there is a conflict
                                 super()._process_config,
