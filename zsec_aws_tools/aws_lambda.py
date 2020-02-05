@@ -299,6 +299,35 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
 
 
 def zip_compress(source: Path, output: Union[Path, io.IOBase]) -> None:
+    """
+    Usually you will want to create a directory structure:
+
+      - top_level_module
+        - lambda_function.py
+        - library
+          - __init__.py
+          - etc.py
+
+    If you want to deploy code to an existing function, your code would look like::
+
+        from zsec_aws_tools import aws_lambda as zaws_lambda
+        import boto3
+        from pathlib import Path
+
+        src_file = Path('test_deploy')
+        zip_file = src_file.with_suffix('.zip')
+        zaws_lambda.zip_compress(src_file, zip_file)
+
+        zaws_lambda.FunctionResource(
+                session=boto3.Session(region_name='us-west-2'),
+                name='test_deploy',
+                role='test_role',
+                config=dict(
+                    Code={'ZipFile': zip_file.read_bytes()},
+                    )
+                ).put(force=True)
+
+    """
     import os
 
     with zipfile.ZipFile(output, 'w') as zf:
@@ -306,7 +335,7 @@ def zip_compress(source: Path, output: Union[Path, io.IOBase]) -> None:
             for dd, _, ffs in os.walk(str(source)):
                 for ff in ffs:
                     pp = Path(dd, ff)
-                    zf.write(pp, arcname=pp.relative_to(Path('src')))
+                    zf.write(pp, arcname=pp.relative_to(source))
         else:
             zf.write(source, arcname=str(source))
 
