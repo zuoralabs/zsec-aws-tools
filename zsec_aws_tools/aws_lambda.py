@@ -340,6 +340,18 @@ def zip_compress(source: Path, output: Union[Path, io.IOBase]) -> None:
             zf.write(source, arcname=str(source))
 
 
+def zip_string(text: str) -> bytes:
+    import io
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(zinfo_or_arcname='main.py', data=text)
+        # set permissions
+        zf.filelist[0].external_attr = 0o0666 << 16
+
+    return output.getvalue()
+
+
 default_assume_role_policy_document_for_lambda = {
     "Version": "2012-10-17",
     "Statement": [
