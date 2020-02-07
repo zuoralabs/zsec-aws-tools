@@ -423,7 +423,11 @@ class AWSResource(abc.ABC):
             elif isinstance(vv, str) and _aws_input_type is bytes:
                 return vv.encode()
             else:
-                return _aws_input_type(vv)
+                try:
+                    return _aws_input_type(vv)
+                except ValueError:
+                    logger.exception(f"Error processing {vv}.")
+                    raise
 
     def _process_config(self, config: Mapping) -> Mapping:
         processed_config = dict(config)
