@@ -91,7 +91,8 @@ class IAMResource(HasServiceResource, AwaitableAWSResource, AWSResource, abc.ABC
             if force or remote_tags.get(manager_tag_key) == self.manager:
                 self.update()
             else:
-                raise ValueError("Resource managed by another manager.")
+                raise ValueError(f"Resource managed by another manager ({remote_tags.get(manager_tag_key)})."
+                                 f"self.manager = {self.manager}")
         else:
             logger.info('{} "{}" does not exist. Creating.'.format(self._description_top_key, self.name))
             resp, self.index_id = self.create(wait=wait)
