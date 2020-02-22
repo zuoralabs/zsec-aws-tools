@@ -184,7 +184,7 @@ class Policy(IAMResource):
             if not version.is_default_version:
                 version.delete()
 
-        super().delete(not_exists_ok=not_exists_ok, **kwargs)
+        return super().delete(not_exists_ok=not_exists_ok, **kwargs)
 
 
 class Role(IAMResource):
@@ -296,3 +296,14 @@ class Role(IAMResource):
 
         for policy_arn in to_attach:
             res.attach_policy(PolicyArn=policy_arn)
+
+    def delete_inline_policies(self):
+        for inline_policy in self.processed_config.get('InlinePolicies', []):
+            self.service_client.delete_role_policy(**{
+                self.index_id_key: self.index_id,
+                "PolicyName": inline_policy["PolicyName"]})
+
+    def delete(self, not_exists_ok: bool = False, **kwargs) -> Optional[Dict]:
+        if self.exists or not not_exists_ok:
+            self.delete_inline_policies()
+        return super().delete(not_exists_ok=not_exists_ok, **kwargs)

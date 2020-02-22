@@ -22,17 +22,37 @@ def local_iam_policy() -> Generator[zaws_iam.Policy, None, None]:
     policy = zaws_iam.Policy(name='TestPolicy-abtasxabatsawk',
                              session=session,
                              ztid=uuid.UUID('41294B17-2288-4871-AC10-1C3209E99095'),
-                             config=dict(PolicyDocument={
-                                 "Version": "2012-10-17",
-                                 "Statement": [
-                                     {
-                                         "Sid": "AllowLambda",
-                                         "Action": "lambda:*",
-                                         "Effect": "Allow",
-                                         "Resource": "*"
-                                     }
+                             config=dict(
+                                 PolicyDocument={
+                                     "Version": "2012-10-17",
+                                     "Statement": [
+                                         {
+                                             "Sid": "AllowLambda",
+                                             "Action": "lambda:*",
+                                             "Effect": "Allow",
+                                             "Resource": "*"
+                                         }
+                                     ]
+                                 },
+                                 InlinePolicies=[
+                                     dict(
+                                         PolicyName='AllowDynamoDBAndSQSAccess',
+                                         PolicyDocument={
+                                             "Version": "2012-10-17",
+                                             "Statement": [
+                                                 {
+                                                     "Sid": "PolicyStatementDynamoDB01",
+                                                     "Action": [
+                                                         "dynamodb:Query", "dynamodb:Scan",
+                                                     ],
+                                                     "Effect": "Allow",
+                                                     "Resource": ["*"],
+                                                 },
+                                             ]
+                                         }
+                                     ),
                                  ]
-                             }))
+                             ))
     yield policy
     policy.delete(not_exists_ok=True)
 
