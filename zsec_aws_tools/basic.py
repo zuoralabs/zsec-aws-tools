@@ -13,6 +13,8 @@ import uuid
 from types import MappingProxyType
 from toolz import pipe, identity
 import attr
+import pynamodb.models
+from pynamodb.attributes import UnicodeAttribute
 from .meta import get_operation_model, type_name_mapping, get_parameter_shapes, apply_with_relevant_kwargs
 from .async_tools import map_async
 
@@ -191,6 +193,46 @@ def decode_from_verbose_aws_tags(tag_list: Iterable[Dict[str, str]]) -> Dict[str
     return {item['Key']: item['Value'] for item in tag_list}
 
 
+class CloudResourceMetaDescriptionBase(pynamodb.models.Model):
+    zrn = UnicodeAttribute(hash_key=True)
+    ztid = UnicodeAttribute()
+    manager = UnicodeAttribute()
+    region_name = UnicodeAttribute()
+    type = UnicodeAttribute()
+    name = UnicodeAttribute()
+    account_number = UnicodeAttribute()
+    index_id = UnicodeAttribute()
+    table_parameter_name = "/tables/zsec-fleet-former/resources_by_zrn"
+
+    @classmethod
+    def attach_credentials(cls, session: boto3.Session, region_name: str = None) -> 'CloudResourceMetaDescriptionBase':
+        credentials = session.get_credentials()
+        ssm = session.client('ssm', region_name=region_name)
+        _table_name = ssm.get_parameter(Name=cls.table_parameter_name)['Parameter']['Value']
+
+        class _CloudResourceMetaDescription(cls):
+            class Meta:
+                table_name = _table_name
+                region = region_name
+                aws_access_key_id = credentials.access_key
+                aws_secret_access_key = credentials.secret_key
+                aws_session_token = credentials.token
+
+        return _CloudResourceMetaDescription
+
+    @classmethod
+    def set_table_name(cls, session: boto3.Session, table_name: str, **kwargs):
+        ssm = session.client('ssm')
+        ssm.put_parameter(
+            Name=cls.table_parameter_name,
+            Description='Name of the table containing resources created by fleet former, indexed by ZRN.',
+            Value=table_name,
+            Type='String',
+            AllowedPattern=r'[\w_-]+$',
+            **kwargs
+        )
+
+
 class AWSResource(abc.ABC):
     _description_top_key: str
     sdk_name: str  # name in sdk functions, for example create_*, delete_*, etc.
@@ -203,6 +245,8 @@ class AWSResource(abc.ABC):
     not_found_exception_name: str
     parameter_converters: Mapping[str, Callable] = MappingProxyType({})
     custom_parameter_shapes: Mapping[str, Shape] = MappingProxyType({})
+    create_method_name: str = None  # name of the creation method
+    meta_description_model: Optional[CloudResourceMetaDescriptionBase]
     non_creation_parameters = ()
     non_creation_parameter_handlers = ()
 
@@ -308,8 +352,11 @@ class AWSResource(abc.ABC):
         combined_kwargs = {self.name_key: self.name}
         combined_kwargs.update(self.processed_config)
         combined_kwargs.update(kwargs)
-        client_method = getattr(self.service_client, "create_{}".format(self.sdk_name))
-        
+        if self.create_method_name is None:
+            client_method = getattr(self.service_client, "create_{}".format(self.sdk_name))
+        else:
+            client_method = getattr(self.service_client, self.create_method_name)
+
         resp = apply_with_relevant_kwargs(self.service_client, client_method, combined_kwargs)
         description = resp.get(self._description_top_key, resp)
         index_id = description.get(self.index_id_key)
@@ -519,3 +566,8 @@ def standard_tags(res: AWSResource) -> Mapping:
     """Provide Manager and ztid tags"""
     return {manager_tag_key: res.manager,
             'ztid': str(res.ztid or uuid.uuid4())}
+
+
+def construct_zrn(account_number: str, res: AWSResource):
+    return f'zrn:aws:{account_number}:{res.region_name}:{res.ztid}'
+

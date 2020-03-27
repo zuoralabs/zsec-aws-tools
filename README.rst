@@ -27,6 +27,13 @@ or add to `install_requires` in `setup.py` for your module.
     ]
 
 
+Testing
+========
+
+The test suite uses pytest. Before running tests, run `testing/utils/setup-test-resource-table.py`
+in your test account.
+
+
 Usage
 =====
 

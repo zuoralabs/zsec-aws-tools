@@ -2,11 +2,11 @@ import logging
 import io
 import uuid
 from typing import Dict, Union, Mapping, Generator, Optional
-from toolz import pipe, merge
+from toolz import pipe, merge, first
 from toolz.curried import assoc
 
 from .basic import (scroll, AWSResource, AwaitableAWSResource, manager_tag_key,
-                    standard_tags, get_account_id)
+                    standard_tags, get_account_id, CloudResourceMetaDescriptionBase, construct_zrn)
 from .meta import get_operation_model, apply_with_relevant_kwargs
 import zipfile
 from pathlib import Path
@@ -364,3 +364,73 @@ default_assume_role_policy_document_for_lambda = {
         }
     ]
 }
+
+class Layer(AWSResource):
+    _description_top_key = "Layer"
+    sdk_name = "layer"
+    create_method_name = "publish_layer_version"
+    name_key = "LayerName"
+    index_id_key = name_key
+
+    def _get_index_id_from_name(self) -> Optional[str]:
+        pass
+
+    def describe(self) -> Dict:
+        return {'LayerVersions': scroll(self.service_client.list_layer_versions, LayerName=self.name)}
+
+    def
+
+    def put(self, wait: bool = True, force: bool = False):
+        self.service_client.publish_layer_version(
+            LayerName=self.name,
+            **self.processed_config,
+        )
+
+    def get_meta_description(self) -> CloudResourceMetaDescriptionBase:
+        account_number = get_account_id(self.session, None)
+        zrn = construct_zrn(account_number, self)
+        return first(self.meta_description_model.query(zrn))
+
+    def _get_index_id_from_ztid(self) -> Optional[str]:
+        """Return ID using self.name
+
+        Requires that self.ztid is set and that it is unique.
+        Should only be called during `__init__` to set `self.index_id`.
+        If it returns a string, it means this resource exists.
+
+        """
+        return self.get_meta_description().index_id
+
+    def get_tags(self) -> Dict[str, str]:
+        meta_description = self.get_meta_description()
+        return {
+            'ztid': meta_description.ztid,
+            'manager': meta_description.manager
+        }
+
+    def list_with_tags(self, session, region_name=None, sync=False) -> Generator['AWSResource', None, None]:
+        raise NotImplementedError
+
+        account_number = get_account_id(session, None)
+        zrn = construct_zrn(account_number, self)
+        meta_description = self.meta_description_model.query(zrn)
+        service_client = session.client(self.service_name, region_name=region_name)
+
+        def resource_with_tags(description):
+            tags = description.get('Tags',
+                                   service_client.list_tags(Resource=description['FunctionArn'])['Tags'])
+
+            return FunctionResource(session=session,
+                                    region_name=region_name,
+                                    ztid=pipe(tags.get('ztid'), lambda x: uuid.UUID(x) if x else None),
+                                    index_id=description[self.index_id_key],
+                                    config={'Tags': tags},
+                                    assume_exists=True)
+
+        return map_async(resource_with_tags, scroll(service_client.list_functions), sync=sync)
+
+    def get_latest_layer_version(self):
+        return max(
+            self.service_client.list_layer_versions(LayerName=self.name)['LayerVersions'],
+            key=lambda x: x['Version']
+        )['LayerVersionArn']
