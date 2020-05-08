@@ -5,5 +5,5 @@ setuptools.setup(
         packages=['zsec_aws_tools'],
         install_requires=['boto3', 'toolz'],
         tests_require=['toolz', 'pytest'],
-        version='0.1.18',
+        version='0.1.19',
         )
