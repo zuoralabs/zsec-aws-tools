@@ -345,11 +345,16 @@ class Role(IAMResource):
         for policy_arn in to_attach:
             res.attach_policy(PolicyArn=policy_arn)
 
-    def delete_inline_policies(self):
-        for inline_policy in self.processed_config.get('InlinePolicies', []):
+    def delete_inline_policies(self, using_config=False):
+        if using_config:
+            inline_policy_names = (policy['PolicyName'] for policy in self.processed_config.get('InlinePolicies', []))
+        else:
+            inline_policy_names = scroll(self.service_client.list_role_policies, RoleName=self.name)
+
+        for inline_policy_name in inline_policy_names:
             self.service_client.delete_role_policy(**{
                 self.index_id_key: self.index_id,
-                "PolicyName": inline_policy["PolicyName"]})
+                "PolicyName": inline_policy_name})
 
     def delete(self, not_exists_ok: bool = False, **kwargs) -> Optional[Dict]:
         if self.exists or not not_exists_ok:
