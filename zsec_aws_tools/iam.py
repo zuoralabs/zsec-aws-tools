@@ -326,6 +326,8 @@ class Role(IAMResource):
         # self.service_client.list_role_policies fails to list policies attached to the role, for unknown reasons.
         # use the resource API instead
         # return scroll(self.service_client.list_role_policies, **{self.name_key: self.name})
+        logger.warning(f"The behavior of {__class__}.list_role_policies is inconsistent with list_role_policies "
+                       f"from the boto3 service client. This behavior will change in the future.")
         res = self.boto3_resource()
         return (Policy(index_id=policy.arn, session=self.session, region_name=self.region_name)
                 for policy in res.attached_policies.all())
