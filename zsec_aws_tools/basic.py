@@ -4,18 +4,20 @@ import boto3
 import abc
 import json
 import collections.abc as cabc
-from typing import Tuple, Dict, List, Optional, Mapping, Callable, Generator, Set, Any, Union, Iterable
+from typing import Tuple, Dict, List, Optional, Mapping, Callable, Generator, Union, Iterable
 from functools import partial
-from .cleaning import clean_up_stack
 import logging
 import time
 import uuid
 from types import MappingProxyType
+
 from toolz import pipe, identity
 import attr
-import pynamodb.models
-from pynamodb.attributes import UnicodeAttribute
-from .meta import get_operation_model, type_name_mapping, get_parameter_shapes, apply_with_relevant_kwargs
+
+from .meta import (
+    get_operation_model, type_name_mapping, get_parameter_shapes, apply_with_relevant_kwargs, \
+    CloudResourceMetaDescriptionBase
+)
 from .async_tools import map_async
 
 logger = logging.getLogger(__name__)
@@ -191,46 +193,6 @@ def encode_to_verbose_aws_tags(tag_dict: Dict[str, str]) -> List[Dict[str, str]]
 def decode_from_verbose_aws_tags(tag_list: Iterable[Dict[str, str]]) -> Dict[str, str]:
     """Decode verbose style tags to simple styled tags"""
     return {item['Key']: item['Value'] for item in tag_list}
-
-
-class CloudResourceMetaDescriptionBase(pynamodb.models.Model):
-    zrn = UnicodeAttribute(hash_key=True)
-    ztid = UnicodeAttribute()
-    manager = UnicodeAttribute()
-    region_name = UnicodeAttribute()
-    type = UnicodeAttribute()
-    name = UnicodeAttribute()
-    account_number = UnicodeAttribute()
-    index_id = UnicodeAttribute()
-    table_parameter_name = "/tables/zsec-fleet-former/resources_by_zrn"
-
-    @classmethod
-    def attach_credentials(cls, session: boto3.Session, region_name: str = None) -> 'CloudResourceMetaDescriptionBase':
-        credentials = session.get_credentials()
-        ssm = session.client('ssm', region_name=region_name)
-        _table_name = ssm.get_parameter(Name=cls.table_parameter_name)['Parameter']['Value']
-
-        class _CloudResourceMetaDescription(cls):
-            class Meta:
-                table_name = _table_name
-                region = region_name
-                aws_access_key_id = credentials.access_key
-                aws_secret_access_key = credentials.secret_key
-                aws_session_token = credentials.token
-
-        return _CloudResourceMetaDescription
-
-    @classmethod
-    def set_table_name(cls, session: boto3.Session, table_name: str, **kwargs):
-        ssm = session.client('ssm')
-        ssm.put_parameter(
-            Name=cls.table_parameter_name,
-            Description='Name of the table containing resources created by fleet former, indexed by ZRN.',
-            Value=table_name,
-            Type='String',
-            AllowedPattern=r'[\w_-]+$',
-            **kwargs
-        )
 
 
 class AWSResource(abc.ABC):
@@ -570,4 +532,3 @@ def standard_tags(res: AWSResource) -> Mapping:
 
 def construct_zrn(account_number: str, res: AWSResource):
     return f'zrn:aws:{account_number}:{res.region_name}:{res.ztid}'
-

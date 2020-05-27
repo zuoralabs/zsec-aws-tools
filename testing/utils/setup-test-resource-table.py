@@ -1,4 +1,4 @@
-from zsec_aws_tools.basic import CloudResourceMetaDescriptionBase
+from zsec_aws_tools.meta import CloudResourceMetaDescriptionBase
 import boto3
 
 session = boto3.Session(profile_name='test', region_name='us-east-1')

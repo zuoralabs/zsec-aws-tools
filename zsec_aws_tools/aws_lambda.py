@@ -6,8 +6,8 @@ from toolz import pipe, merge, first
 from toolz.curried import assoc
 
 from .basic import (scroll, AWSResource, AwaitableAWSResource, manager_tag_key,
-                    standard_tags, get_account_id, CloudResourceMetaDescriptionBase, construct_zrn)
-from .meta import get_operation_model, apply_with_relevant_kwargs
+                    standard_tags, get_account_id, construct_zrn)
+from .meta import get_operation_model, apply_with_relevant_kwargs, CloudResourceMetaDescriptionBase
 import zipfile
 from pathlib import Path
 import hashlib

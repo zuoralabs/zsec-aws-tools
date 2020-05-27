@@ -1,6 +1,9 @@
 from typing import Tuple, Generator
 
+import boto3
 import botocore.model
+import pynamodb.models
+from pynamodb.attributes import UnicodeAttribute
 
 type_name_mapping = {'string': str,
                      'long': int,
@@ -45,3 +48,43 @@ def get_parameter_shapes(service_client, *operation_names: str) -> Generator[Tup
         operation_model = get_operation_model(service_client, operation_name)
         for key, shape in operation_model.input_shape.members.items():
             yield key, shape
+
+
+class CloudResourceMetaDescriptionBase(pynamodb.models.Model):
+    zrn = UnicodeAttribute(hash_key=True)
+    ztid = UnicodeAttribute()
+    manager = UnicodeAttribute()
+    region_name = UnicodeAttribute()
+    type = UnicodeAttribute()
+    name = UnicodeAttribute()
+    account_number = UnicodeAttribute()
+    index_id = UnicodeAttribute()
+    table_parameter_name = "/tables/zsec-fleet-former/resources_by_zrn"
+
+    @classmethod
+    def attach_credentials(cls, session: boto3.Session, region_name: str = None) -> 'CloudResourceMetaDescriptionBase':
+        credentials = session.get_credentials()
+        ssm = session.client('ssm', region_name=region_name)
+        _table_name = ssm.get_parameter(Name=cls.table_parameter_name)['Parameter']['Value']
+
+        class _CloudResourceMetaDescription(cls):
+            class Meta:
+                table_name = _table_name
+                region = region_name
+                aws_access_key_id = credentials.access_key
+                aws_secret_access_key = credentials.secret_key
+                aws_session_token = credentials.token
+
+        return _CloudResourceMetaDescription
+
+    @classmethod
+    def set_table_name(cls, session: boto3.Session, table_name: str, **kwargs):
+        ssm = session.client('ssm')
+        ssm.put_parameter(
+            Name=cls.table_parameter_name,
+            Description='Name of the table containing resources created by fleet former, indexed by ZRN.',
+            Value=table_name,
+            Type='String',
+            AllowedPattern=r'[\w_-]+$',
+            **kwargs
+        )
