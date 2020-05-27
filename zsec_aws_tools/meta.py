@@ -1,3 +1,4 @@
+import functools
 from typing import Tuple, Generator
 
 import boto3
@@ -50,24 +51,19 @@ def get_parameter_shapes(service_client, *operation_names: str) -> Generator[Tup
             yield key, shape
 
 
-class CloudResourceMetaDescriptionBase(pynamodb.models.Model):
-    zrn = UnicodeAttribute(hash_key=True)
-    ztid = UnicodeAttribute()
-    manager = UnicodeAttribute()
-    region_name = UnicodeAttribute()
-    type = UnicodeAttribute()
-    name = UnicodeAttribute()
-    account_number = UnicodeAttribute()
-    index_id = UnicodeAttribute()
-    table_parameter_name = "/tables/zsec-fleet-former/resources_by_zrn"
+class PartialModel(pynamodb.models.Model):
+    """
+    Model without defined region and credentials
+    """
 
     @classmethod
-    def attach_credentials(cls, session: boto3.Session, region_name: str = None) -> 'CloudResourceMetaDescriptionBase':
+    def attach_credentials(cls, session: boto3.Session, region_name: str = None) -> __class__:
         credentials = session.get_credentials()
         ssm = session.client('ssm', region_name=region_name)
         _table_name = ssm.get_parameter(Name=cls.table_parameter_name)['Parameter']['Value']
 
-        class _CloudResourceMetaDescription(cls):
+        @functools.wraps(__class__)
+        class Completed(cls):
             class Meta:
                 table_name = _table_name
                 region = region_name
@@ -75,7 +71,7 @@ class CloudResourceMetaDescriptionBase(pynamodb.models.Model):
                 aws_secret_access_key = credentials.secret_key
                 aws_session_token = credentials.token
 
-        return _CloudResourceMetaDescription
+        return Completed
 
     @classmethod
     def set_table_name(cls, session: boto3.Session, table_name: str, **kwargs):
@@ -88,3 +84,15 @@ class CloudResourceMetaDescriptionBase(pynamodb.models.Model):
             AllowedPattern=r'[\w_-]+$',
             **kwargs
         )
+
+
+class CloudResourceMetaDescriptionBase(PartialModel):
+    zrn = UnicodeAttribute(hash_key=True)
+    ztid = UnicodeAttribute()
+    manager = UnicodeAttribute()
+    region_name = UnicodeAttribute()
+    type = UnicodeAttribute()
+    name = UnicodeAttribute()
+    account_number = UnicodeAttribute()
+    index_id = UnicodeAttribute()
+    table_parameter_name = "/Sec/tables/zsec-fleet-former/resources_by_zrn"
