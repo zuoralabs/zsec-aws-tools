@@ -76,3 +76,11 @@ Furthermore, this library aims to be robust. Infrastructure-as-code requires
 state to be matched with code, and this mapping can become out of sync and
 corrupted. This library is meant to facilitate recovery from corrupted mapping
 between state and code.
+
+
+Helpful tips
+=============
+
+To generate a lower case UUID::
+
+    ruby -e 'puts %x(uuidgen).downcase'
