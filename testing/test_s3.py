@@ -91,7 +91,7 @@ def test_existing_s3_bucket(s3_bucket, caplog):
                           ztid=s3_bucket.ztid,
                           config=s3_bucket.config)
 
-    assert copy._get_index_id_from_ztid() == copy.name
+    assert copy._get_index_id_from_ztid_and_serial_id() == copy.name
 
     assert copy.exists
 

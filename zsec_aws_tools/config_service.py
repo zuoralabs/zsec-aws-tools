@@ -56,6 +56,7 @@ class ConfigRule(AWSResource):
                        region_name=region_name,
                        index_id=index_id,
                        ztid=pipe(tags.get('ztid'), lambda x: uuid.UUID(x) if x else None),
+                       serial_id=tags.get('serial_id'),
                        config={'Tags': tags},
                        assume_exists=True)
 

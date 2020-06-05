@@ -125,6 +125,7 @@ class FunctionResource(AwaitableAWSResource, AWSResource):
             return FunctionResource(session=session,
                                     region_name=region_name,
                                     ztid=pipe(tags.get('ztid'), lambda x: uuid.UUID(x) if x else None),
+                                    serial_id=tags.get('serial_id'),
                                     index_id=description[cls.index_id_key],
                                     config={'Tags': tags},
                                     assume_exists=True)

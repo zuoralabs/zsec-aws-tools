@@ -241,7 +241,7 @@ class AWSResource(abc.ABC):
         else:
             assert name
             self.name = name
-            maybe_index_value = self._get_index_id_from_ztid() if ztid else None
+            maybe_index_value = self._get_index_id_from_ztid_and_serial_id() if ztid else None
             if maybe_index_value is None:
                 maybe_index_value = self._get_index_id_from_name()
 
@@ -353,7 +353,7 @@ class AWSResource(abc.ABC):
             logger.info("Waiting until {} exists ...".format(self))
             time.sleep(1)
 
-    def _get_index_id_from_ztid(self) -> Optional[str]:
+    def _get_index_id_from_ztid_and_serial_id(self) -> Optional[str]:
         """Return ID using self.ztid
 
         Requires that self.ztid is set and that it is unique.
@@ -362,7 +362,7 @@ class AWSResource(abc.ABC):
 
         """
         for res in self.list_with_tags(self.session, self.region_name):  # type: AWSResource
-            if res.ztid == self.ztid:
+            if res.ztid == self.ztid and (not self.serial_id or res.serial_id == self.serial_id):
                 return res.index_id
 
     @classmethod
@@ -502,6 +502,7 @@ class HasServiceResource(AWSResource, abc.ABC):
                        region_name=region_name,
                        index_id=index_id,
                        ztid=pipe(tags.get('ztid'), lambda x: uuid.UUID(x) if x else None),
+                       serial_id=tags.get('serial_id'),
                        config={'Tags': tags},
                        assume_exists=True)
 
