@@ -210,6 +210,7 @@ class AWSResource(abc.ABC):
 
     def __init__(self, session: boto3.Session, region_name=None, name=None, index_id=None,
                  ztid: Optional[uuid.UUID] = None,
+                 serial_id: Optional[str] = None,
                  config: Optional[Mapping] = None,
                  assume_exists: bool = False,
                  manager: str = zsec_tools_manager_tag_value):
@@ -222,6 +223,7 @@ class AWSResource(abc.ABC):
         self.region_name = region_name or session.region_name
         self.service_client = session.client(self.service_name, region_name=region_name)
         self.ztid = ztid
+        self.serial_id = serial_id
         self.manager = manager
 
         if not (name or index_id):
@@ -353,7 +355,7 @@ class AWSResource(abc.ABC):
             time.sleep(1)
 
     def _get_index_id_from_ztid(self) -> Optional[str]:
-        """Return ID using self.name
+        """Return ID using self.ztid
 
         Requires that self.ztid is set and that it is unique.
         Should only be called during `__init__` to set `self.index_id`.
