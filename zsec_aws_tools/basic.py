@@ -6,7 +6,6 @@ import json
 import collections.abc as cabc
 from typing import Tuple, Dict, List, Optional, Mapping, Callable, Generator, Set, Any, Union, Iterable
 from functools import partial
-from .cleaning import clean_up_stack
 import logging
 import time
 import uuid
