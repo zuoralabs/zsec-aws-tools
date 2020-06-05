@@ -352,6 +352,21 @@ def zip_string(text: str) -> bytes:
     return output.getvalue()
 
 
+def zip_single_file(pp: Path):
+    import io
+    import zipfile
+
+    data = pp.read_bytes()
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(zinfo_or_arcname=pp.name, data=data)
+        # set permissions
+        zf.filelist[0].external_attr = 0o0701 << 16
+
+    return output.getvalue()
+
+
 default_assume_role_policy_document_for_lambda = {
     "Version": "2012-10-17",
     "Statement": [
